@@ -1,0 +1,372 @@
+# BACTrackManager Implementation Plan
+
+Build a self-hosted BACtrack platform with a React Native capture app, a browser-based administration and map experience, and a NestJS backend. The first releasable slice supports authenticated users, teams, managed BACtrack devices, immutable test results, offline-safe synchronization, and LAN/home-lab deployment. BACtrack consumer-history import and Dawarich overlays follow only after the capture and tenancy contracts are stable.
+
+Done means an operator can invite a teammate, select that teammate as the test subject, acquire an exclusive device lease, complete a physical BACtrack test on iOS or Android, recover from an interrupted upload without duplication, and see the result in the web dashboard. A user can choose disabled, upload-only, download-only, or bidirectional synchronization. A connected Dawarich instance adds movement points to the map without copying the full location history into BACTrackManager.
+
+<Callout id="plan-status" tone="warning">
+
+`docs/postgres-schema.sql` is a domain-model prototype, not an executable production migration. Implementation starts by replacing it with versioned Drizzle migrations, correcting tenant constraints, lease ownership, invitation null handling, authentication records, synchronization change feeds, and credential revocation.
+
+</Callout>
+
+## Product Workflow
+
+1. A user registers, verifies email, and receives a private personal organization.
+2. An owner creates a team, registers a BACtrack by serial number, and invites operators or viewers by email.
+3. An operator chooses a team member as subject. The API validates both memberships and atomically creates the test session and exclusive device lease.
+4. The mobile Turbo Native Module emits normalized connection and test events from the native BACtrack SDK. The app writes every event to encrypted local storage before rendering it.
+5. Completion uploads one immutable result using a client-generated idempotency key. The API commits the result, releases the lease, appends audit/change-feed records, and publishes an SSE update in one logical operation.
+6. The web dashboard displays personal/team history. The map always shows BAC markers and adds Dawarich location points when the user has a verified connection and download permission.
+
+<Mermaid
+  id="system-architecture"
+  source={"flowchart TB\n  subgraph Clients\n    Mobile[React Native mobile]\n    Web[Next.js web]\n    BrowserBLE[Optional Web Bluetooth spike]\n  end\n  subgraph Services\n    API[NestJS API]\n    Worker[BullMQ worker]\n    SSE[SSE stream]\n  end\n  subgraph State\n    PG[(PostgreSQL)]\n    Redis[(Redis)]\n    S3[(MinIO or S3)]\n  end\n  subgraph External\n    SDK[BACtrack native SDKs]\n    Consumer[BACtrack consumer API]\n    Dawarich[Dawarich API v1]\n    SMTP[SMTP]\n  end\n  Mobile --> API\n  Web --> API\n  BrowserBLE -. experiment .-> API\n  Mobile --> SDK\n  API --> PG\n  API --> Redis\n  API --> S3\n  API --> SSE\n  Worker --> PG\n  Worker --> Redis\n  Worker --> Consumer\n  API --> Dawarich\n  Worker --> SMTP"}
+  caption="Runtime boundaries and external adapters."
+/>
+
+## Settled Technical Decisions
+
+<Callout id="technical-decisions" tone="decision">
+
+- Use a pnpm/Turborepo TypeScript monorepo.
+- Use bare React Native with the New Architecture and a typed Turbo Native Module generated from a TypeScript specification. BACtrack remains behind a `BreathalyzerAdapter` interface so tests use a deterministic fake.
+- Use Next.js App Router for web, NestJS for API and workers, Drizzle for typed PostgreSQL access plus explicit SQL migrations, BullMQ for jobs, SSE for server-to-client status, Redis for coordination, and MinIO/S3 for files.
+- Target PostgreSQL 17 or newer. Use separate owner, migration, and runtime roles. Force RLS on tenant tables and keep composite organization foreign keys as a second boundary.
+- Use short-lived JWT access tokens and rotating opaque refresh tokens stored hashed in PostgreSQL. Support password plus email magic-link login; defer passkeys and MFA.
+- Use UUIDv7-compatible application-generated public IDs. Do not expose sequential database identifiers.
+- Store BAC values exactly as reported in `%BAC` decimal form. Convert only for display; persist the source unit and payload.
+- Treat captured readings and audit records as append-only. Corrections are new notes or flags, never edits to measured values.
+- Use Bearer authentication for Dawarich when the installed instance supports it, because query-string keys can leak through logs. Pin the tested Dawarich OpenAPI contract by instance version.
+
+</Callout>
+
+## Scope and Non-goals
+
+The first production slice includes iOS/Android capture, accounts, personal organizations, teams, email invitations, roles, device registration, exclusive leases, immutable readings, notes, four sync modes, web history, audit events, backups, and home-lab deployment behind HTTPS.
+
+The first slice does not promise browser BLE, medical/legal evidentiary compliance, real-time location tracking by BACTrackManager, advanced analytics, public cloud multi-region operation, passkeys, or a desktop native BLE implementation. Browser BLE is a time-boxed feasibility experiment; Dawarich owns raw movement history.
+
+## Planned Repository
+
+<FileTree
+  id="planned-repository"
+  title="Implementation file map"
+  entries={[
+    {"path":"apps/api/src/main.ts","change":"added","note":"NestJS HTTP bootstrap, validation, request IDs, and graceful shutdown."},
+    {"path":"apps/api/src/modules/auth","change":"added","note":"Registration, email verification, password/magic-link login, refresh rotation, and client revocation."},
+    {"path":"apps/api/src/modules/tenancy","change":"added","note":"Organizations, teams, memberships, policy checks, and RLS transaction context."},
+    {"path":"apps/api/src/modules/devices","change":"added","note":"Device registry, assignments, maintenance, and atomic lease service."},
+    {"path":"apps/api/src/modules/tests","change":"added","note":"Test lifecycle, event batches, immutable result completion, and acknowledgements."},
+    {"path":"apps/api/src/modules/sync","change":"added","note":"Versioned push/pull protocol, change feed, cursors, tombstones, and mode enforcement."},
+    {"path":"apps/api/src/modules/integrations","change":"added","note":"BACtrack consumer import and Dawarich adapters behind provider interfaces."},
+    {"path":"apps/worker/src/main.ts","change":"added","note":"Email, imports, exports, maintenance reminders, and retryable jobs."},
+    {"path":"apps/mobile/specs/NativeBACtrack.ts","change":"added","note":"Codegen contract for methods, events, metadata, and normalized error codes."},
+    {"path":"apps/mobile/android","change":"added","note":"Kotlin BACtrack SDK adapter and Android permission/lifecycle integration."},
+    {"path":"apps/mobile/ios","change":"added","note":"Swift or Objective-C++ BACtrack SDK adapter and iOS lifecycle integration."},
+    {"path":"apps/mobile/src/features/test-session","change":"added","note":"Connection/test reducer, local event journal, subject selection, and recovery UI."},
+    {"path":"apps/mobile/src/features/sync","change":"added","note":"Encrypted local database, directional workers, cursors, and backlog consent."},
+    {"path":"apps/web/src/app","change":"added","note":"Auth, dashboard, history, teams, devices, map, settings, and integration pages."},
+    {"path":"packages/contracts","change":"added","note":"Zod DTOs, error codes, event envelopes, and generated OpenAPI client types."},
+    {"path":"packages/database","change":"added","note":"Drizzle schema, migrations, RLS policies, seeds, and test factories."},
+    {"path":"packages/device-state","change":"added","note":"Platform-neutral capture states and transition tests."},
+    {"path":"infra/compose","change":"added","note":"PostgreSQL, Redis, MinIO, API, worker, web, and reverse proxy services."},
+    {"path":"docs/runbooks","change":"added","note":"Deployment, backup/restore, secret rotation, device support, and incident procedures."}
+  ]}
+/>
+
+## Contracts Before Features
+
+All endpoints use `/v1`, Bearer authentication except login/invite acceptance, an `X-Request-Id`, and the same error envelope. Organization-scoped routes require an explicit organization ID in the path or token context; no route infers tenant access from an object ID alone.
+
+<Code
+  id="error-envelope"
+  filename="packages/contracts/src/errors.ts"
+  language="ts"
+  caption="Stable API failure contract."
+  code={"export type ApiError = {\n  error: {\n    code: string;\n    message: string;\n    requestId: string;\n    retryable: boolean;\n    details?: Record<string, unknown>;\n  };\n};\n"}
+/>
+
+<Endpoint id="create-session" method="POST" path="/v1/organizations/{organizationId}/test-sessions" summary="Create a managed test and acquire a device lease" auth="Bearer token" request={{"contentType":"application/json","example":"{ \"clientSessionId\": \"uuidv7\", \"deviceId\": \"uuidv7\", \"teamId\": \"uuidv7\", \"subjectUserId\": \"uuidv7\", \"mobileClientId\": \"uuidv7\" }"}} responses={[
+  {"status":"201","description":"Session and lease created atomically","example":"{ \"sessionId\": \"uuidv7\", \"leaseId\": \"uuidv7\", \"leaseExpiresAt\": \"ISO-8601\", \"status\": \"created\" }"},
+  {"status":"409","description":"Device is already leased or idempotency input conflicts"},
+  {"status":"422","description":"Device, operator, or subject is outside the selected team"}
+]} />
+
+<Endpoint id="complete-session" method="POST" path="/v1/organizations/{organizationId}/test-sessions/{sessionId}/complete" summary="Persist one immutable measured result" auth="Bearer token" request={{"contentType":"application/json","example":"{ \"idempotencyKey\": \"uuidv7\", \"measuredBac\": \"0.0800\", \"unit\": \"bac_percent\", \"capturedAt\": \"ISO-8601\", \"device\": { \"serialNumber\": \"...\", \"model\": \"C8\" }, \"events\": [] }"}} responses={[
+  {"status":"201","description":"Reading, audit record, change event, and lease release committed"},
+  {"status":"200","description":"Exact retry returns the existing reading"},
+  {"status":"409","description":"Same key was previously used with different content"}
+]} />
+
+<Endpoint id="sync-push" method="POST" path="/v1/sync/push" summary="Push an ordered batch of local operations" auth="Bearer token" request={{"contentType":"application/json","example":"{ \"protocolVersion\": 1, \"mobileClientId\": \"uuidv7\", \"operations\": [{ \"operationId\": \"uuidv7\", \"type\": \"test.complete\", \"payload\": {} }] }"}} responses={[
+  {"status":"200","description":"Per-operation accepted, duplicate, rejected, or retryable outcomes"},
+  {"status":"403","description":"Effective sync mode disallows upload"},
+  {"status":"409","description":"Client must refresh authorization or resolve a protocol conflict"}
+]} />
+
+<Endpoint id="sync-pull" method="GET" path="/v1/sync/pull" summary="Pull authorized changes after an opaque cursor" auth="Bearer token" params={[
+  {"name":"cursor","in":"query","type":"string","description":"Opaque cursor returned by the previous committed page."},
+  {"name":"limit","in":"query","type":"integer","description":"Maximum 500 changes."}
+]} responses={[
+  {"status":"200","description":"Ordered changes, revocation tombstones, and next cursor"},
+  {"status":"403","description":"Effective sync mode disallows download"},
+  {"status":"410","description":"Cursor expired; client must perform an authorized snapshot refresh"}
+]} />
+
+<Endpoint id="invite-member" method="POST" path="/v1/organizations/{organizationId}/teams/{teamId}/invites" summary="Invite a team member by email" auth="Bearer token" request={{"contentType":"application/json","example":"{ \"email\": \"member@example.com\", \"organizationRole\": \"operator\", \"teamRole\": \"member\" }"}} responses={[
+  {"status":"202","description":"Invitation stored and email job queued"},
+  {"status":"403","description":"Inviter cannot grant the requested role"},
+  {"status":"429","description":"Organization or recipient rate limit reached"}
+]} />
+
+<Endpoint id="map-points" method="GET" path="/v1/me/map/points" summary="Return BAC markers and optional Dawarich points" auth="Bearer token" params={[
+  {"name":"from","in":"query","type":"string","required":true},
+  {"name":"to","in":"query","type":"string","required":true},
+  {"name":"includeDawarich","in":"query","type":"boolean"}
+]} responses={[
+  {"status":"200","description":"BAC markers plus a separately typed Dawarich point layer"},
+  {"status":"206","description":"BAC markers returned; Dawarich unavailable with a typed warning"},
+  {"status":"403","description":"Download direction or location consent is disabled"}
+]} />
+
+## Data and Security Model
+
+<DataModel
+  id="core-data-model"
+  entities={[
+    {"id":"organizations","name":"organizations","fields":[{"name":"id","type":"uuidv7","pk":true},{"name":"kind","type":"personal | shared"},{"name":"name","type":"text"}]},
+    {"id":"memberships","name":"memberships","fields":[{"name":"organization_id","type":"uuidv7","fk":"organizations.id"},{"name":"user_id","type":"uuidv7","fk":"users.id"},{"name":"role","type":"owner | admin | operator | viewer"}]},
+    {"id":"devices","name":"devices","fields":[{"name":"id","type":"uuidv7","pk":true},{"name":"organization_id","type":"uuidv7","fk":"organizations.id"},{"name":"serial_number","type":"text"}]},
+    {"id":"sessions","name":"test_sessions","fields":[{"name":"id","type":"uuidv7","pk":true},{"name":"organization_id","type":"uuidv7","fk":"organizations.id"},{"name":"device_id","type":"uuidv7","fk":"devices.id"},{"name":"capture_status","type":"capture_status"},{"name":"sync_status","type":"sync_status"}]},
+    {"id":"leases","name":"device_leases","fields":[{"name":"id","type":"uuidv7","pk":true},{"name":"session_id","type":"uuidv7","fk":"test_sessions.id"},{"name":"device_id","type":"uuidv7","fk":"devices.id"},{"name":"expires_at","type":"timestamptz"}]},
+    {"id":"readings","name":"readings","fields":[{"name":"id","type":"uuidv7","pk":true},{"name":"session_id","type":"uuidv7","fk":"test_sessions.id"},{"name":"value","type":"numeric(6,4)"},{"name":"origin","type":"native | consumer_import"}]},
+    {"id":"changes","name":"sync_changes","fields":[{"name":"sequence","type":"bigint","pk":true},{"name":"organization_id","type":"uuidv7","fk":"organizations.id"},{"name":"entity_type","type":"text"},{"name":"operation","type":"upsert | tombstone"}]},
+    {"id":"audits","name":"audit_logs","fields":[{"name":"id","type":"uuidv7","pk":true},{"name":"organization_id","type":"uuidv7","fk":"organizations.id"},{"name":"action","type":"text"},{"name":"occurred_at","type":"timestamptz"}]}
+  ]}
+  relations={[
+    {"from":"memberships","to":"organizations","kind":"n-1"},
+    {"from":"devices","to":"organizations","kind":"n-1"},
+    {"from":"sessions","to":"devices","kind":"n-1"},
+    {"from":"leases","to":"sessions","kind":"1-1"},
+    {"from":"readings","to":"sessions","kind":"1-1"},
+    {"from":"changes","to":"organizations","kind":"n-1"},
+    {"from":"audits","to":"organizations","kind":"n-1"}
+  ]}
+/>
+
+The first migration set must enforce these invariants:
+
+- Every tenant-owned row carries `organization_id`; composite foreign keys prevent cross-organization references.
+- RLS is enabled and forced for runtime access. A transaction-local `app.user_id` and `app.organization_id` are set before any tenant query and reset by transaction completion. The runtime role does not own tables and has no `BYPASSRLS`.
+- A personal organization is created with its owner in the registration transaction. The last owner cannot leave or be demoted.
+- `device_leases` has one active row per device and one active row per session. Composite keys prove that device, session, mobile client, and holder belong to the same tenant. Acquisition locks the device row and retires an expired lease before insertion.
+- Capture lifecycle and transport lifecycle use separate columns. A completed reading requires capture status `completed`; sync state never changes the measured state.
+- `readings` and `audit_logs` reject runtime UPDATE/DELETE. Privacy deletion creates explicit redaction/tombstone records through a privileged maintenance procedure.
+- Pending invitation uniqueness uses `NULLS NOT DISTINCT` or separate partial indexes for organization-only and team invitations. Removing a team revokes its pending invites instead of nulling only `team_id`.
+- Sync changes use a monotonically ordered server sequence. Membership removal emits tombstones so cached team data is deleted from clients.
+- Provider credentials are envelope-encrypted with key version metadata. Revocation clears ciphertext while preserving non-secret connection and audit history.
+
+## Native BACtrack Contract
+
+The TypeScript Codegen spec exposes promises for commands and one event stream. Native callbacks are normalized before crossing the bridge.
+
+<Code
+  id="native-contract"
+  filename="apps/mobile/specs/NativeBACtrack.ts"
+  language="ts"
+  code={"export type BACtrackEvent =\n  | { type: 'sdk.authorized' }\n  | { type: 'scan.found'; device: DiscoveredDevice }\n  | { type: 'connection.ready'; device: DeviceMetadata }\n  | { type: 'test.countdown'; seconds: number }\n  | { type: 'test.blow'; fractionRemaining: number }\n  | { type: 'test.analyzing' }\n  | { type: 'test.result'; measuredBac: number }\n  | { type: 'error'; code: BACtrackErrorCode; retryable: boolean };\n\nexport interface NativeBACtrackSpec {\n  initialize(apiKey: string): Promise<void>;\n  startScan(timeoutMs: number): Promise<void>;\n  connect(deviceId: string, timeoutMs: number): Promise<void>;\n  startTest(): Promise<void>;\n  cancelCurrentOperation(): Promise<void>;\n  disconnect(): Promise<void>;\n  getDeviceMetadata(): Promise<DeviceMetadata>;\n}\n"}
+  annotations={[
+    {"lines":"1-9","label":"One event vocabulary","note":"Both native platforms map SDK callback names into identical typed events."},
+    {"lines":"12-18","label":"Cancelable commands","note":"Every long operation has an explicit timeout and can be cancelled on screen exit or app lifecycle changes."}
+  ]}
+/>
+
+<Mermaid
+  id="capture-sequence"
+  source={"sequenceDiagram\n  actor U as Operator\n  participant M as Mobile\n  participant A as API\n  participant D as PostgreSQL\n  participant B as BACtrack bridge\n  U->>M: Select device and subject\n  M->>A: Create managed session\n  A->>D: Lock device and create lease\n  D-->>A: Session and lease\n  A-->>M: Lease contract\n  M->>B: Connect and start test\n  B-->>M: Countdown, blow, analyze, result\n  M->>M: Persist events locally\n  M->>A: Complete with idempotency key\n  A->>D: Reading plus audit plus release lease\n  D-->>A: Commit once\n  A-->>M: Reading and cursor\n  M-->>U: Show immutable result"}
+  caption="Managed device test and idempotent completion."
+/>
+
+Android and iOS acceptance matrices cover permission denial/regrant, API-key rejection, scan cancellation, selected-device connection, timeout, disconnect, background/foreground, countdown, blow progress, analysis, result, device error, serial number, battery, firmware, and use count. Pin the BACtrack native SDK versions and record supported C6, C8, Mobile, and Mobile V2 hardware separately.
+
+## Synchronization Protocol
+
+Mobile stores sessions, events, readings, notes, local operations, remote entities, and cursor state in an encrypted SQLite database. A platform keystore/keychain-wrapped database key is mandatory. The queue never depends on React component lifetime.
+
+Effective mode is the per-client override when present, otherwise the user default:
+
+| Mode | Push local data | Pull cloud data | Managed team tests |
+| --- | --- | --- | --- |
+| `disabled` | no | no | no |
+| `upload_only` | yes | no | yes |
+| `download_only` | no | yes | no |
+| `bidirectional` | yes | yes | yes |
+
+Push rules: process operations in local sequence order, max 100 operations or 512 KiB per request, retry network/5xx failures with capped exponential backoff and jitter, persist per-item outcomes, and stop immediately when upload permission is removed. Idempotency is scoped to `(mobile_client_id, operation_id)` and request payload hash.
+
+Pull rules: server order is a bigint sequence, pages contain at most 500 changes, cursor advancement and local page application share one SQLite transaction, tombstones remove inaccessible cached data, and an expired cursor triggers an authorized snapshot. Server timestamps decide ordering; device timestamps remain provenance only.
+
+Changing from a non-upload mode never sends old readings automatically. The backlog screen shows item count, date range, and estimated size, then records explicit consent before enqueueing selected items.
+
+## Authorization Matrix
+
+| Action | Owner | Admin | Operator | Viewer | Team manager |
+| --- | --- | --- | --- | --- | --- |
+| Manage organization roles | yes | limited | no | no | no |
+| Create/delete teams | yes | yes | no | no | no |
+| Invite team member | yes | yes | no | no | members only |
+| Register/assign device | yes | yes | limited | no | assigned team only |
+| Run managed test | yes | yes | yes | no | if also operator |
+| View team readings | yes | yes | assigned teams | assigned teams | assigned team |
+| Export team data | yes | yes | optional policy | no | optional policy |
+| Share one test location | subject only | no | no | no | no |
+
+Every service method accepts an `ActorContext` containing user, organization, client, and role claims; controllers do not implement policy logic. Tests cover every deny path, not only successful roles.
+
+## Implementation Phases
+
+### Phase 0: Contract and hardware gates
+
+Create ADRs for IDs, tenancy/RLS, auth tokens, immutability/deletion, sync protocol, native event vocabulary, and provider adapters. Obtain BACtrack developer approval/API key and physical devices. Pin minimum iOS/Android versions, React Native baseline, BACtrack SDK versions, PostgreSQL, Dawarich instance version, and SMTP behavior.
+
+Exit gate: the native contract compiles through Codegen; OpenAPI contains stable errors and core DTOs; the permission/device matrix and unresolved provider fields are documented; no production schema is applied yet.
+
+### Phase 1: Monorepo and infrastructure foundation
+
+Create pnpm workspace, Turborepo tasks, strict TypeScript configs, lint/test/build CI, NestJS API and worker, Next.js shell, React Native shell, Docker Compose, PostgreSQL/Redis/MinIO health checks, structured logging, request IDs, and `.env.example` without secrets.
+
+Exit gate: one command starts infrastructure and apps; CI runs lint, typecheck, unit tests, migration checks, API build, web build, and mobile native compile checks.
+
+### Phase 2: Database, auth, tenancy, and invitations
+
+Replace the prototype SQL with ordered Drizzle migrations. Add login identities, verified email, password hash, magic/reset tokens, hashed refresh sessions, registered clients, personal/shared organization kind, memberships, teams, invitation lifecycle fields, audit events, RLS policies, grants, and seed factories. Implement register, verify, login, refresh rotation, logout-all, client revoke, team CRUD, invite/resend/revoke/accept, and last-owner protection.
+
+Exit gate: migrations apply to an empty database, rerun as no-op, and roll back on injected failure; cross-tenant and pooled-connection RLS tests fail closed; invitation races create one membership and one acceptance audit event.
+
+### Phase 3: Physical BACtrack feasibility and native bridge
+
+Implement the Codegen module on Android and iOS behind `BreathalyzerAdapter`. First use a fake adapter to complete UI/state tests, then connect one real supported unit on each platform. Normalize callback ordering and errors; persist events before UI transitions; handle permission, cancellation, backgrounding, and reconnects.
+
+Exit gate: a real test reaches a measured result on Android and iOS; logs contain no API key or BAC value unless explicitly enabled in local development; all matrix cases have pass/fail evidence.
+
+### Phase 4: Managed capture and immutable ingestion
+
+Implement device registry, assignments, maintenance metadata, atomic session/lease acquisition, lease renewal/release/expiry recovery, event batch ingestion, idempotent completion, append-only readings, acknowledgement, notes, change-feed append, audit append, and SSE publication. Publish SSE only after commit.
+
+Exit gate: two clients racing for one device yield one lease; crash recovery expires it; exact upload retries return the same reading; mismatched retry payloads return conflict; no cross-team subject can be selected.
+
+### Phase 5: Offline database and directional sync
+
+Implement encrypted local schema, operation journal, push batching, pull pages, atomic cursors, snapshot recovery, tombstones, four modes, immediate worker cancellation, network reachability handling, and explicit backlog consent. Add a debug screen that shows mode, queue size, last push/pull, cursor, and last error without exposing secrets.
+
+Exit gate: capture offline, kill/restart the app, reconnect, and prove exactly one server reading; every sync mode produces zero prohibited-direction requests; membership revocation removes cached team data on next allowed pull.
+
+### Phase 6: Web product and team workflow
+
+Build dashboard, personal/team history, reading detail, team members, invitations, devices, maintenance, audit view, sync/client settings, notification preferences, and realtime session observer. Add accessible loading, empty, partial-failure, and permission-denied states. Support CSV export first; PDF/JSON follow after job infrastructure is stable.
+
+Exit gate: an owner invites an operator, the operator tests another member, the subject acknowledges it, and authorized users see SSE/history updates while a viewer cannot mutate anything.
+
+### Phase 7: BACtrack consumer import
+
+Implement OAuth 1.0 only after authenticated provider docs and sanitized fixtures are available. Store request state and encrypted access credentials, run one import per connection, commit each page plus cursor atomically, deduplicate stable provider IDs, quarantine malformed records, show counts, and support disconnect/delete-imported-data behavior.
+
+Exit gate: multipage import survives worker restart and duplicate pages without duplicate readings; token revocation removes ciphertext; raw payload retention/redaction tests pass.
+
+### Phase 8: Dawarich map overlay
+
+Add admin-approved server origin configuration, encrypted per-user Bearer credential, connection verification, strict no-redirect HTTP client, instance-version contract fixture, Redis response caching, date-window limits, BAC-only fallback, independently toggleable Dawarich points/tracks, nearest-point linking, and subject-consented single-point team sharing.
+
+Exit gate: map works without Dawarich; connected users see points for a selected range; timeout returns BAC markers with a typed warning; SSRF/DNS-rebinding cases fail; disconnect clears credentials and linked-location deletion does not modify Dawarich.
+
+### Phase 9: Operations and release hardening
+
+Add notifications, maintenance reminders, export expiration, object cleanup, metrics, readiness/liveness, rate limits, backup/restore, key rotation, data export/deletion, dependency scanning, mobile release signing, upgrade/rollback runbooks, and a browser BLE feasibility report. Browser BLE ships only if real BACtrack GATT access succeeds without private undocumented protocol assumptions.
+
+Exit gate: restore a fresh deployment from backup, rotate JWT/provider encryption keys, rehearse migration rollback, complete the physical-device matrix, and pass security/load/failure-injection suites.
+
+## Verification Strategy
+
+<Checklist
+  id="verification-checklist"
+  items={[
+    {"id":"verify-contracts","label":"OpenAPI and generated clients compile without drift","note":"API CI fails when generated contracts are stale."},
+    {"id":"verify-migrations","label":"Apply migrations to empty and prior-version databases","note":"Include rollback and backup restore rehearsal."},
+    {"id":"verify-tenancy","label":"Run cross-tenant FK, RLS, and role-denial integration suites","note":"Exercise pooled connection context reset."},
+    {"id":"verify-device","label":"Complete physical BACtrack tests on supported iOS and Android versions","note":"Cover permission, background, disconnect, timeout, and SDK rejection."},
+    {"id":"verify-idempotency","label":"Race leases and replay completion/import/sync requests","note":"Exactly one durable result per idempotency scope."},
+    {"id":"verify-sync","label":"Run offline restart and all four sync-mode E2E scenarios","note":"Assert prohibited requests never leave the device."},
+    {"id":"verify-team","label":"Run invitation, attribution, acknowledgement, and RBAC E2E journey","note":"Include resend, expiry, revoke, and last-owner cases."},
+    {"id":"verify-dawarich","label":"Run Dawarich absent, healthy, timeout, malformed, and SSRF cases","note":"Raw movement history must not be persisted locally by normal map views."},
+    {"id":"verify-operations","label":"Deploy clean, restore backup, rotate secrets, and inspect observability","note":"Confirm logs and traces redact tokens, coordinates, and BAC values."}
+  ]}
+/>
+
+Unit tests cover reducers, policy functions, normalization, serializers, and cursor logic. PostgreSQL integration tests run against a real database. API tests use Supertest; jobs use deterministic queues and provider fixtures; web/mobile flows use their native E2E frameworks. Physical BACtrack checks remain a separate hardware-in-the-loop suite and are required for release candidates.
+
+## Deployment and Operations
+
+The home-lab Compose deployment contains Caddy, web, API, worker, PostgreSQL, Redis, and MinIO on a private network. Only HTTPS web/API ports are published. PostgreSQL uses a persistent volume, daily encrypted logical backups, weekly restore verification, and explicit migration-before-rollout. Redis is disposable coordination state; PostgreSQL remains authoritative. MinIO lifecycle rules remove expired exports while retaining referenced attachments.
+
+Readiness requires PostgreSQL, Redis, migration version, and object storage. External provider failures degrade their feature only. The API and worker use graceful shutdown, bounded retries, dead-letter visibility, structured JSON logs, metrics for queue depth/lease conflicts/sync lag/import failures, and alerts for backup failure or repeated provider authorization errors.
+
+## Key Risks
+
+- BACtrack provides native SDKs but no official maintained React Native library. The typed bridge and physical regression matrix are owned by this project.
+- BACtrack consumer API details remain behind authenticated documentation. Phase 7 cannot start from public assumptions.
+- Dawarich APIs can change between releases. Pin an instance version and contract-test its `/api-docs` output.
+- Offline bidirectional sync and membership revocation are the highest-complexity application features. Do not begin them before the ordered change feed and tombstone contract exists.
+- Location and BAC data are sensitive. Logs, exports, notifications, backups, and support diagnostics must default to redaction.
+
+## External Documentation Baseline
+
+- [BACtrack SDK overview](https://developer.bactrack.com/breathalyzer_sdk/documentation)
+- [BACtrack React Native demo](https://developer.bactrack.com/breathalyzer_sdk/react_native/demo)
+- [React Native Turbo Native Modules](https://reactnative.dev/docs/turbo-native-modules-introduction)
+- [PostgreSQL row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
+- [Dawarich API v1](https://dawarich.app/docs/api/dawarich-api/)
+- [Dawarich location tracking](https://dawarich.app/docs/getting-started/track-your-location/)
+
+### Open Questions
+
+<QuestionForm
+  id="implementation-open-questions"
+  questions={[
+    {
+      "id":"subject-identity",
+      "title":"Who can be selected as a test subject in the first release?",
+      "subtitle":"This changes tenancy, consent, invitation, and deletion behavior.",
+      "mode":"single",
+      "options":[
+        {"id":"accounts-only","label":"Registered team accounts only","detail":"Every subject accepts an invitation and controls their own history. Simplest secure MVP.","recommended":true},
+        {"id":"managed-profiles","label":"Allow managed non-login profiles","detail":"Operators can create subjects without accounts; requires guardian/ownership and later account-claim rules."}
+      ],
+      "required":true
+    },
+    {
+      "id":"shared-reading-deletion",
+      "title":"What should happen when a subject deletes a shared team result?",
+      "subtitle":"Measured values are operationally immutable, but privacy deletion still needs a defined outcome.",
+      "mode":"single",
+      "options":[
+        {"id":"anonymize-shared","label":"Anonymize shared record","detail":"Remove subject identity and private metadata while preserving the team measurement and audit tombstone.","recommended":true},
+        {"id":"delete-all","label":"Delete result everywhere","detail":"Remove the team result and linked artifacts after a retention grace period."},
+        {"id":"organization-policy","label":"Organization retention policy","detail":"Let each organization choose, requiring more policy UI and legal wording."}
+      ],
+      "required":true
+    },
+    {
+      "id":"browser-ble-budget",
+      "title":"How much effort should browser Bluetooth receive?",
+      "mode":"single",
+      "options":[
+        {"id":"timeboxed-spike","label":"Two-day feasibility spike","detail":"Test discovery and GATT access on real hardware, then stop unless the protocol is safely usable.","recommended":true},
+        {"id":"defer","label":"Defer completely","detail":"Use mobile capture only and keep web focused on administration and maps."}
+      ],
+      "required":true
+    }
+  ]}
+  submitLabel="Approve implementation direction"
+/>
+

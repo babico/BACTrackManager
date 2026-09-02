@@ -1,0 +1,169 @@
+erDiagram
+  USERS ||--o{ MEMBERSHIPS : joins
+  USERS ||--|| USER_SYNC_PREFERENCES : controls
+  USERS ||--o{ CLIENT_SYNC_PREFERENCES : overrides
+  CLIENT_SYNC_PREFERENCES ||--|| CLIENT_SYNC_CURSORS : tracks
+  USERS ||--o{ MOBILE_CLIENTS : registers
+  MOBILE_CLIENTS ||--o| CLIENT_SYNC_PREFERENCES : configures
+  MOBILE_CLIENTS ||--o| CLIENT_SYNC_CURSORS : resumes
+  ORGANIZATIONS ||--o{ MEMBERSHIPS : contains
+  ORGANIZATIONS ||--o{ TEAMS : owns
+  TEAMS ||--o{ TEAM_MEMBERSHIPS : contains
+  USERS ||--o{ TEAM_MEMBERSHIPS : belongs_to
+  ORGANIZATIONS ||--o{ DEVICES : owns
+  TEAMS ||--o{ DEVICE_ASSIGNMENTS : receives
+  DEVICES ||--o{ DEVICE_ASSIGNMENTS : assignment_history
+  DEVICES ||--o{ DEVICE_LEASES : leased_for
+  DEVICES ||--o{ DEVICE_MAINTENANCE_RECORDS : maintained_by
+  ORGANIZATIONS ||--o{ TEST_SESSIONS : contains
+  DEVICES ||--o{ TEST_SESSIONS : captures
+  USERS ||--o{ TEST_SESSIONS : operates
+  TEST_SESSIONS ||--o{ SESSION_EVENTS : records
+  TEST_SESSIONS ||--o| READINGS : produces
+  READINGS ||--o{ READING_NOTES : annotated_by
+  READINGS ||--o{ ATTACHMENTS : evidenced_by
+  READINGS ||--o{ READING_TAGS : classified_by
+  TAGS ||--o{ READING_TAGS : applies_to
+  USERS ||--o{ CONSUMER_CONNECTIONS : authorizes
+  USERS ||--o| DAWARICH_CONNECTIONS : connects
+  ORGANIZATIONS ||--o{ CONSUMER_CONNECTIONS : owns_import_scope
+  CONSUMER_CONNECTIONS ||--o{ HISTORY_IMPORT_JOBS : runs
+  CONSUMER_CONNECTIONS ||--o{ CONSUMER_READING_IMPORTS : identifies
+  HISTORY_IMPORT_JOBS ||--o{ CONSUMER_READING_IMPORTS : imports
+  READINGS ||--o| CONSUMER_READING_IMPORTS : has_source_record
+  READINGS ||--o| READING_LOCATION_LINKS : may_link_to
+  DAWARICH_CONNECTIONS ||--o{ READING_LOCATION_LINKS : provides
+  ORGANIZATIONS ||--o{ INVITES : issues
+  TEAMS ||--o{ INVITES : targets
+  ORGANIZATIONS ||--o{ AUDIT_LOGS : records
+  USERS ||--o{ NOTIFICATIONS : receives
+  ORGANIZATIONS ||--o{ EXPORT_JOBS : produces
+
+  USERS {
+    uuid id PK
+    text email UK
+    text display_name
+    timestamptz created_at
+  }
+  USER_SYNC_PREFERENCES {
+    uuid user_id PK
+    sync_mode default_sync_mode
+    timestamptz changed_at
+  }
+  CLIENT_SYNC_PREFERENCES {
+    uuid mobile_client_id PK
+    uuid user_id FK
+    sync_mode sync_mode
+  }
+  CLIENT_SYNC_CURSORS {
+    uuid mobile_client_id PK
+    text pull_cursor
+    timestamptz last_pulled_at
+  }
+  MOBILE_CLIENTS {
+    uuid id PK
+    uuid user_id FK
+    text platform
+  }
+  ORGANIZATIONS {
+    uuid id PK
+    text name
+    text slug UK
+    timestamptz created_at
+  }
+  MEMBERSHIPS {
+    uuid organization_id FK
+    uuid user_id FK
+    membership_role role
+  }
+  TEAMS {
+    uuid id PK
+    uuid organization_id FK
+    text name
+  }
+  TEAM_MEMBERSHIPS {
+    uuid team_id FK
+    uuid user_id FK
+    team_role role
+  }
+  DEVICES {
+    uuid id PK
+    uuid organization_id FK
+    text serial_number UK
+    text model
+    device_status status
+  }
+  DEVICE_MAINTENANCE_RECORDS {
+    uuid id PK
+    uuid device_id FK
+    maintenance_type maintenance_type
+    timestamptz due_at
+  }
+  TEST_SESSIONS {
+    uuid id PK
+    uuid organization_id FK
+    uuid device_id FK
+    uuid operator_user_id FK
+    uuid subject_user_id FK
+    uuid client_session_id UK
+    test_session_status status
+  }
+  READINGS {
+    uuid id PK
+    uuid test_session_id FK
+    numeric bac_value
+    text bac_unit
+    timestamptz captured_at
+  }
+  CONSUMER_CONNECTIONS {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    text provider
+    timestamptz authorized_at
+  }
+  DAWARICH_CONNECTIONS {
+    uuid id PK
+    uuid user_id FK
+    text server_url
+  }
+  HISTORY_IMPORT_JOBS {
+    uuid id PK
+    uuid consumer_connection_id FK
+    import_job_status status
+    text next_cursor
+  }
+  CONSUMER_READING_IMPORTS {
+    uuid id PK
+    text provider_reading_id
+    uuid reading_id FK
+  }
+  READING_LOCATION_LINKS {
+    uuid reading_id PK
+    uuid dawarich_connection_id FK
+    numeric latitude
+    numeric longitude
+  }
+  TAGS {
+    uuid id PK
+    uuid organization_id FK
+    text name
+  }
+  NOTIFICATIONS {
+    uuid id PK
+    uuid user_id FK
+    notification_channel channel
+    notification_status status
+  }
+  EXPORT_JOBS {
+    uuid id PK
+    uuid organization_id FK
+    export_status status
+  }
+  INVITES {
+    uuid id PK
+    uuid organization_id FK
+    uuid team_id FK
+    text email
+    invite_status status
+  }

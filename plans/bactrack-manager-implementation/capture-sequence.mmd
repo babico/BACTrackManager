@@ -1,0 +1,21 @@
+sequenceDiagram
+  actor U as Operator
+  participant M as Mobile app
+  participant A as API
+  participant D as PostgreSQL
+  participant B as BACtrack bridge
+
+  U->>M: Select device and subject
+  M->>A: POST /v1/test-sessions
+  A->>D: Lock device and create session plus lease
+  D-->>A: Session and lease
+  A-->>M: Session contract
+  M->>B: connect and start test
+  B-->>M: countdown, blow, analyze, result events
+  M->>M: Persist every event locally
+  M->>A: POST /v1/test-sessions/id/complete
+  A->>D: Insert reading, release lease, append audit event
+  D-->>A: Committed once
+  A-->>M: Reading and sync cursor
+  M-->>U: Show immutable result
+

@@ -1,0 +1,41 @@
+flowchart TB
+  subgraph "Clients"
+    Mobile["React Native mobile app"]
+    Web["Next.js web app"]
+    BrowserBLE["Optional Web Bluetooth spike"]
+  end
+
+  subgraph "BACTrackManager services"
+    API["NestJS HTTP API"]
+    Worker["BullMQ worker"]
+    SSE["SSE event stream"]
+  end
+
+  subgraph "State"
+    Postgres[("PostgreSQL")]
+    Redis[("Redis")]
+    Objects[("MinIO / S3")]
+  end
+
+  subgraph "External systems"
+    BACtrackSDK["BACtrack iOS / Android SDK"]
+    ConsumerAPI["BACtrack consumer API"]
+    Dawarich["Dawarich API v1"]
+    SMTP["SMTP server"]
+  end
+
+  Mobile --> API
+  Web --> API
+  BrowserBLE -.-> API
+  API --> Postgres
+  API --> Redis
+  API --> Objects
+  API --> SSE
+  Worker --> Postgres
+  Worker --> Redis
+  Worker --> Objects
+  Mobile --> BACtrackSDK
+  Worker --> ConsumerAPI
+  API --> Dawarich
+  Worker --> SMTP
+
