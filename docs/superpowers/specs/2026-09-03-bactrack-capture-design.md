@@ -105,3 +105,66 @@ M0 key application submitted. M1 BLE survey doc. M2 monorepo + infra +
 migrations. M3 fake-adapter E2E (S2 done-criteria). M4 real-SDK swap +
 C6 hardware-in-loop matrix on iOS. M5 second device + second iPhone race
 test for lease exclusivity. Dawarich overlay only after M4 green.
+Consumer-history import (section 8) can parallelize with M2/M3 — no longer
+gated on authenticated provider docs.
+
+## 8. BACtrack consumer API v1 (captured from official iOS app, no SDK needed)
+
+Source: `user-app-requests.har` (local only, git-ignored, contains live
+secrets — never commit, see section 9). Public developer docs still describe
+OAuth 1.0; the shipped app actually uses Auth0 PKCE + Bearer JWT. The docs
+are outdated; this capture supersedes them for the import path.
+
+- Base: `https://consumer-api.bactrack.com`. Auth: `Authorization: Bearer
+  <user JWT>` on every call. App UA: `BACtrack/<build> CFNetwork/...`.
+- Login flow (Auth0 PKCE at `https://login.bactrack.com`): `GET /authorize`
+  with `client_id, code_challenge, code_challenge_method=S256,
+  response_type=code, redirect_uri (app callback scheme), scope, audience,
+  state, auth0Client` -> system-browser login (`/u/login`, username +
+  password) -> code to app callback -> `POST /oauth/token` with `code,
+  client_id, code_verifier, redirect_uri, grant_type=authorization_code` ->
+  Bearer JWT (~791 chars). `POST /oauth/revoke` with `token, client_id`
+  on logout. JWKS at `/.well-known/jwks.json`. Concrete `client_id`,
+  `audience`, and callback scheme are extractable from the local HAR when
+  implementing; they are first-party app credentials, not user secrets.
+- `GET /api/v1/readings?page&limit` -> 200 `{readings: [{bacLevel: int,
+  breathalyzerMode, deviceSN, deviceType, id: uuid, latitude: float,
+  longitude: float, organizationID: uuid, platform, syncedAt: ISO-8601,
+  testedAt: ISO-8601, testedAtTimezone, userID: uuid}]}`. Observed limits
+  1/20/100; single page returned 23 rows.
+- `POST /api/v1/readings` with `{readings: [{bacLevel, organizationID,
+  deviceSN, longitude, testedAt, deviceType, platform, latitude,
+  testedAtTimezone, syncedAt, breathalyzerMode}]}` -> 201, echoes created
+  row(s) including server `id`. Client-generated content; server trusts the
+  client value — ingest as `origin = consumer_import`, never as verified
+  managed capture.
+- `GET /api/v1/devices?page&limit` -> 200 `{has_more: bool, items:
+  [{created_at, device_type, id: uuid, metadata: {}, serial_number, status,
+  updated_at}], limit, page, total}`.
+- `GET /api/v1/users/me` -> `{email, firstName, id: uuid, lastName, phone:
+  {callingCode, countryCode, international, national, number}, status}`.
+- `GET /api/v1/users/me/preferences` -> `{userPreferences: [{category,
+  createdAt, organizationID, preferences: {...}, updatedAt}]}`.
+- `GET /api/v1/consents/me/status` -> `{requiredConsents: [], status}`.
+- `GET /api/v1/users/migration` -> 404 `{message}` when no migration pending.
+- `GET https://developer.bactrack.com/verify/?api_token=` -> 200 body `ok`.
+  SDK-key check is a trivial GET; still requires a real issued key.
+- Observed enums: `deviceType: c6`, `breathalyzerMode: app`,
+  `status: active`, deviceSN pattern `NN-XXX-N-NNNNN`.
+- No-SDK product consequence: account login (PKCE in system browser, never
+  touching the password), history import, device list, and upload relay are
+  all implementable without the developer SDK key. Live breath capture still
+  needs the device (SDK or S1 GATT work) because the C6 has no display and
+  the BAC value originates in hardware. Treat all consumer-origin rows as
+  untrusted-client data: separate origin flag, raw payload retained,
+  idempotency on provider `id`.
+
+## 9. Capture hygiene (HAR lessons)
+
+- A `.har` of a login session contains plaintext password, Bearer JWTs,
+  cookies, PII, and home GPS in trivially decodable form. `*.har` is
+  git-ignored. Never attach captures to issues, PRs, or chat.
+- After any credential appears in a capture, rotate it (BACtrack account
+  password first). Prefer app-generated test accounts for future captures.
+- Future captures: use a throwaway account, quit unrelated tabs, strip
+  `Cookie`/`Authorization` before storing, keep only the endpoint shapes.

@@ -1,0 +1,6 @@
+# Local secrets and captures — NEVER commit
+*.har
+*.har.yaml
+.env
+.env.*
+!.env.example
