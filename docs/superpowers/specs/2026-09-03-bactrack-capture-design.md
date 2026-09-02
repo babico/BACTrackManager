@@ -159,6 +159,29 @@ are outdated; this capture supersedes them for the import path.
   untrusted-client data: separate origin flag, raw payload retained,
   idempotency on provider `id`.
 
+## 10. Auth strategy: hybrid (approved)
+
+- Primary: "Sign in with BACtrack" via Auth0 PKCE against
+  `login.bactrack.com` (flow in section 8). System browser only; our code
+  never sees the password. On first login, create `users` row + personal
+  organization, link `bactrack_identities(user_id, provider_user_id,
+  provider_organization_id, encrypted_refresh, token_key_version)`.
+  Provider `userID` is the stable cross-login key; email is display only.
+- Fallback: local email + magic link (no passwords stored, ever). Identity
+  table supports many providers per user from day one, so a BACtrack
+  `client_id` rotation or block degrades to fallback instead of lockout.
+- Our API issues its own short-lived JWT + rotating opaque refresh (as in
+  plan.mdx). BACtrack Bearer is never accepted as our API credential and
+  never leaves the server; clients see only linked-status. Stored Bearer /
+  refresh ciphertext is envelope-encrypted; disconnect wipes ciphertext,
+  keeps non-secret history + audit.
+- Team invites by email still work: invitee links their BACtrack identity at
+  accept time; unmatched emails stay pending until they do.
+- Open verification before build: refresh-token lifetime and re-login
+  frequency against a throwaway BACtrack account (never a personal one);
+  confirm `audience`/`scope` values needed for `offline_access`-style
+  refresh from the HAR's authorize parameters.
+
 ## 9. Capture hygiene (HAR lessons)
 
 - A `.har` of a login session contains plaintext password, Bearer JWTs,
