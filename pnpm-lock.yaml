@@ -24,6 +24,9 @@ importers:
         specifier: ^8.13.1
         version: 8.23.0
     devDependencies:
+      '@types/node':
+        specifier: ^22.7.0
+        version: 22.20.1
       '@types/pg':
         specifier: ^8.11.0
         version: 8.23.1
@@ -506,8 +509,8 @@ packages:
     cpu: [arm64]
     os: [win32]
 
-  '@types/node@26.4.1':
-    resolution: {integrity: sha512-k97ENvZWtvA6yqz5/FS6a7duDgOPEeOQOc2iKS/nY6mX6qJUKtLnWzQS+Xj6tXweyj6ZcTAK2Qecetnvi9nCLA==}
+  '@types/node@22.20.1':
+    resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
   '@types/pg@8.23.1':
     resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
@@ -729,8 +732,8 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
-  undici-types@8.3.0:
-    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
@@ -981,13 +984,13 @@ snapshots:
   '@turbo/windows-arm64@2.10.12':
     optional: true
 
-  '@types/node@26.4.1':
+  '@types/node@22.20.1':
     dependencies:
-      undici-types: 8.3.0
+      undici-types: 6.21.0
 
   '@types/pg@8.23.1':
     dependencies:
-      '@types/node': 26.4.1
+      '@types/node': 22.20.1
       pg-protocol: 1.16.0
       pg-types: 2.2.0
 
@@ -1180,6 +1183,6 @@ snapshots:
 
   typescript@5.9.3: {}
 
-  undici-types@8.3.0: {}
+  undici-types@6.21.0: {}
 
   xtend@4.0.2: {}
