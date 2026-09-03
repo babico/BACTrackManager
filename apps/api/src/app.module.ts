@@ -11,6 +11,8 @@ import { AuthController } from "./auth/auth.controller.js";
 import { AuthService } from "./auth/auth.service.js";
 import { OrgsController } from "./orgs/orgs.controller.js";
 import { OrgsService } from "./orgs/orgs.service.js";
+import { ImportsController } from "./imports/imports.controller.js";
+import { ImportsService } from "./imports/imports.service.js";
 
 @Module({
   controllers: [
@@ -22,7 +24,8 @@ import { OrgsService } from "./orgs/orgs.service.js";
     AuditController,
     AuthController,
     OrgsController,
+    ImportsController,
   ],
-  providers: [DevicesService, SessionsService, AuthService, OrgsService],
+  providers: [DevicesService, SessionsService, AuthService, OrgsService, ImportsService],
 })
 export class AppModule {}

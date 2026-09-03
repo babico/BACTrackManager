@@ -1,7 +1,10 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { config } from "dotenv";
 import { getPool, closePool } from "../src/index.js";
+
+config({ path: join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", ".env") });
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 const url = process.env.DATABASE_URL;

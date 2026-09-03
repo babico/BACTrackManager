@@ -164,9 +164,7 @@ export const bacReadings = pgTable(
   "bac_readings",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    sessionId: uuid("session_id")
-      .notNull()
-      .references(() => testSessions.id, { onDelete: "restrict" }),
+    sessionId: uuid("session_id").references(() => testSessions.id, { onDelete: "restrict" }),
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
@@ -184,6 +182,7 @@ export const bacReadings = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
     acknowledgedBy: uuid("acknowledged_by").references(() => users.id, { onDelete: "set null" }),
+    providerReadingId: text("provider_reading_id").unique(),
   },
   (t) => [
     index("ix_readings_org_measured").on(t.organizationId, t.measuredAt),
@@ -275,3 +274,18 @@ export const refreshTokens = pgTable(
   },
   (t) => [index("ix_refresh_user").on(t.userId)],
 );
+
+export const consumerImports = pgTable("consumer_imports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  identityId: uuid("identity_id")
+    .notNull()
+    .references(() => bactrackIdentities.id, { onDelete: "cascade" }),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  status: varchar("status", { length: 16 }).notNull().default("completed"),
+  importedCount: integer("imported_count").notNull().default(0),
+  skippedCount: integer("skipped_count").notNull().default(0),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});

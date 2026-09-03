@@ -1,4 +1,9 @@
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { config } from "dotenv";
 import { getPool, closePool } from "../src/index.js";
+
+config({ path: join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", ".env") });
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -6,7 +11,7 @@ if (!url) throw new Error("DATABASE_URL is required");
 const expectedTables = [
   "users", "organizations", "organization_memberships", "team_invites",
   "devices", "test_sessions", "device_leases", "bac_readings", "audit_log",
-  "bactrack_identities", "magic_links", "outbox", "refresh_tokens",
+  "bactrack_identities", "magic_links", "outbox", "refresh_tokens", "consumer_imports",
 ];
 const expectedIndexes = [
   "uq_membership_org_user", "uq_session_client", "uq_lease_one_holder",
