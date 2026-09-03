@@ -130,3 +130,24 @@ describe("completion and readings", () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe("session events", () => {
+  it("streams snapshot plus completion event", async () => {
+    const sn = `SSE-${Date.now()}`;
+    const dev = await api().post("/devices").send({ serialNumber: sn });
+    await api().patch(`/devices/${dev.body.id}`).send({ status: "active" });
+    const sess = await api().post("/sessions").send({
+      deviceId: dev.body.id,
+      subjectUserId: subjectId,
+      clientSessionId: `cs-${Date.now()}`,
+    });
+    const id = sess.body.session.id as string;
+    const stream = await api()
+      .get(`/sessions/${id}/events`)
+      .set("Accept", "text/event-stream")
+      .timeout(15000);
+    expect(stream.status).toBe(200);
+    expect(stream.text).toContain("session.snapshot");
+    expect(stream.text).toContain("session.created");
+  });
+});
