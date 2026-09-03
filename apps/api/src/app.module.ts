@@ -13,6 +13,8 @@ import { OrgsController } from "./orgs/orgs.controller.js";
 import { OrgsService } from "./orgs/orgs.service.js";
 import { ImportsController } from "./imports/imports.controller.js";
 import { ImportsService } from "./imports/imports.service.js";
+import { DawarichController } from "./dawarich/dawarich.controller.js";
+import { DawarichService } from "./dawarich/dawarich.service.js";
 
 @Module({
   controllers: [
@@ -25,7 +27,8 @@ import { ImportsService } from "./imports/imports.service.js";
     AuthController,
     OrgsController,
     ImportsController,
+    DawarichController,
   ],
-  providers: [DevicesService, SessionsService, AuthService, OrgsService, ImportsService],
+  providers: [DevicesService, SessionsService, AuthService, OrgsService, ImportsService, DawarichService],
 })
 export class AppModule {}

@@ -289,3 +289,17 @@ export const consumerImports = pgTable("consumer_imports", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
 });
+
+export const dawarichConnections = pgTable(
+  "dawarich_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    baseUrl: text("base_url").notNull(),
+    encryptedKey: text("encrypted_key"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("uq_dawarich_user").on(t.userId)],
+);
