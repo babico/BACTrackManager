@@ -11,3 +11,4 @@ dist/
 *.tsbuildinfo
 coverage/
 apps/web/.next/
+.playwright-mcp/
