@@ -15,6 +15,7 @@ import { ImportsController } from "./imports/imports.controller.js";
 import { ImportsService } from "./imports/imports.service.js";
 import { DawarichController } from "./dawarich/dawarich.controller.js";
 import { DawarichService } from "./dawarich/dawarich.service.js";
+import { ExportsController } from "./exports/exports.controller.js";
 
 @Module({
   controllers: [
@@ -28,6 +29,7 @@ import { DawarichService } from "./dawarich/dawarich.service.js";
     OrgsController,
     ImportsController,
     DawarichController,
+    ExportsController,
   ],
   providers: [DevicesService, SessionsService, AuthService, OrgsService, ImportsService, DawarichService],
 })
