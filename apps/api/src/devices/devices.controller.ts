@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { z } from "zod";
-import { DevIdentityGuard } from "../identity/dev-identity.guard.js";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
 import { CurrentUser, OrgContext } from "../identity/current-user.js";
 import { assertMembership } from "../identity/membership.js";
 import { parseBody } from "../common/zod-body.js";
@@ -15,7 +15,7 @@ const statusSchema = z.object({
   status: z.enum(["provisioned", "active", "retired"]),
 });
 
-@UseGuards(DevIdentityGuard)
+@UseGuards(JwtAuthGuard)
 @Controller("devices")
 export class DevicesController {
   constructor(

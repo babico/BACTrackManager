@@ -7,9 +7,19 @@ import { SessionEventsController } from "./sessions/session-events.controller.js
 import { SessionsService } from "./sessions/sessions.service.js";
 import { ReadingsController } from "./readings/readings.controller.js";
 import { AuditController } from "./audit/audit.controller.js";
+import { AuthController } from "./auth/auth.controller.js";
+import { AuthService } from "./auth/auth.service.js";
 
 @Module({
-  controllers: [HealthController, DevicesController, SessionsController, SessionEventsController, ReadingsController, AuditController],
-  providers: [DevicesService, SessionsService],
+  controllers: [
+    HealthController,
+    DevicesController,
+    SessionsController,
+    SessionEventsController,
+    ReadingsController,
+    AuditController,
+    AuthController,
+  ],
+  providers: [DevicesService, SessionsService, AuthService],
 })
 export class AppModule {}

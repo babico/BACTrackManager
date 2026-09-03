@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, UseGuards } from "@nestjs/common";
 import { z } from "zod";
-import { DevIdentityGuard } from "../identity/dev-identity.guard.js";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
 import { CurrentUser, OrgContext } from "../identity/current-user.js";
 import { assertMembership } from "../identity/membership.js";
 import { parseBody } from "../common/zod-body.js";
@@ -19,7 +19,7 @@ const completeSchema = z.object({
   rawPayload: z.record(z.unknown()).optional(),
 });
 
-@UseGuards(DevIdentityGuard)
+@UseGuards(JwtAuthGuard)
 @Controller("sessions")
 export class SessionsController {
   constructor(@Inject(SessionsService) private readonly sessions: SessionsService) {}

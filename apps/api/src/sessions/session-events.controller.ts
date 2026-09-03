@@ -1,7 +1,7 @@
 import { Controller, Get, Inject, Param, Sse, UseGuards } from "@nestjs/common";
 import { and, asc, eq, getDb, outbox } from "@bactrack/db";
 import { Observable, concatMap, interval, map, take, toArray } from "rxjs";
-import { DevIdentityGuard } from "../identity/dev-identity.guard.js";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
 import { CurrentUser, OrgContext } from "../identity/current-user.js";
 import { assertMembership } from "../identity/membership.js";
 import { SessionsService } from "./sessions.service.js";
@@ -11,7 +11,7 @@ interface SseEvent {
   data: Record<string, unknown>;
 }
 
-@UseGuards(DevIdentityGuard)
+@UseGuards(JwtAuthGuard)
 @Controller("sessions")
 export class SessionEventsController {
   constructor(@Inject(SessionsService) private readonly sessions: SessionsService) {}

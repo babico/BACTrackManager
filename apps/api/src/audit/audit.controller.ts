@@ -1,10 +1,10 @@
 import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { and, auditLog, desc, eq, getDb } from "@bactrack/db";
-import { DevIdentityGuard } from "../identity/dev-identity.guard.js";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
 import { CurrentUser, OrgContext } from "../identity/current-user.js";
 import { assertMembership } from "../identity/membership.js";
 
-@UseGuards(DevIdentityGuard)
+@UseGuards(JwtAuthGuard)
 @Controller("audit")
 export class AuditController {
   @Get()
