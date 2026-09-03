@@ -151,6 +151,24 @@ are outdated; this capture supersedes them for the import path.
   SDK-key check is a trivial GET; still requires a real issued key.
 - Observed enums: `deviceType: c6`, `breathalyzerMode: app`,
   `status: active`, deviceSN pattern `NN-XXX-N-NNNNN`.
+
+### 8.1 Observed app usage (timing, from HAR)
+
+- No polling. Bursts on app open/foreground with the persisted Bearer:
+  `users/me` + `readings?limit=1` (latest-reading widget) +
+  `readings?limit=20` (history list page) + `preferences`. `limit=100`
+  is used for full sync and post-upload refresh.
+- Upload flow: `POST /readings` (single reading, right after a test)
+  then `GET readings?limit=100` to refresh. Our import mirrors this:
+  link-time full pages, incremental via `limit=1` latest-`testedAt`
+  comparison.
+- `GET developer.bactrack.com/verify/?api_token=<32-hex>` fires at app
+  start, before any login: the SDK key is bundled in the app and checked
+  each launch. We do NOT reuse that bundled key (first-party credential,
+  likely bundle-bound); our path stays user-Bearer via PKCE.
+- Access tokens live for hours (valid across a 2h+ gap with no refresh
+  call). Logout calls `POST /oauth/revoke {token, client_id}` — our
+  disconnect must do the same.
 - No-SDK product consequence: account login (PKCE in system browser, never
   touching the password), history import, device list, and upload relay are
   all implementable without the developer SDK key. Live breath capture still
