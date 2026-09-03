@@ -7,6 +7,13 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DEV_USER_ID: z.string().uuid().optional(),
   DEV_ORG_ID: z.string().uuid().optional(),
+  JWT_SECRET: z.string().min(32),
+  TOKEN_ENC_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/),
+  BACTRACK_DOMAIN: z.string().url().default("https://login.bactrack.com"),
+  BACTRACK_CLIENT_ID: z.string().min(1).optional(),
+  BACTRACK_AUDIENCE: z.string().default("https://api.bactrack.com"),
+  BACTRACK_API: z.string().url().default("https://consumer-api.bactrack.com"),
+  ALLOW_DEV_MAGIC_TOKEN: z.coerce.boolean().default(false),
 });
 
 export type AppConfig = z.infer<typeof schema>;
