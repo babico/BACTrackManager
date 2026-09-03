@@ -1,11 +1,11 @@
 import { auditLog } from "@bactrack/db";
 
+interface Inserter {
+  insert(table: typeof auditLog): { values(v: unknown): unknown };
+}
+
 export async function appendAudit(
-  db: {
-    insert: (table: typeof auditLog) => {
-      values: (v: Record<string, unknown>) => Promise<unknown>;
-    };
-  },
+  db: Inserter,
   entry: {
     organizationId: string;
     actorUserId: string | null;

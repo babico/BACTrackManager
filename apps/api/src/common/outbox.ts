@@ -1,11 +1,11 @@
 import { outbox } from "@bactrack/db";
 
+interface Inserter {
+  insert(table: typeof outbox): { values(v: unknown): unknown };
+}
+
 export async function publishOutbox(
-  db: {
-    insert: (table: typeof outbox) => {
-      values: (v: Record<string, unknown>) => Promise<unknown>;
-    };
-  },
+  db: Inserter,
   event: {
     aggregateType: string;
     aggregateId: string;

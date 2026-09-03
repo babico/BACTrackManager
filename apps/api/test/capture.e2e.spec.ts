@@ -58,3 +58,34 @@ describe("devices", () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe("sessions and leases", () => {
+  it("creates session + lease atomically and second acquire races to 409", async () => {
+    const sn = `RACE-${Date.now()}`;
+    const dev = await api().post("/devices").send({ serialNumber: sn });
+    await api().patch(`/devices/${dev.body.id}`).send({ status: "active" });
+    const payload = {
+      deviceId: dev.body.id,
+      subjectUserId: subjectId,
+      clientSessionId: `cs-${Date.now()}`,
+    };
+    const [a, b] = await Promise.all([
+      api().post("/sessions").send(payload),
+      api().post("/sessions").send({ ...payload, clientSessionId: `cs2-${Date.now()}` }),
+    ]);
+    const codes = [a.status, b.status].sort();
+    expect(codes).toEqual([201, 409]);
+  });
+
+  it("rejects session for unknown subject with 422", async () => {
+    const sn = `UNK-${Date.now()}`;
+    const dev = await api().post("/devices").send({ serialNumber: sn });
+    await api().patch(`/devices/${dev.body.id}`).send({ status: "active" });
+    const res = await api().post("/sessions").send({
+      deviceId: dev.body.id,
+      subjectUserId: "00000000-0000-4000-8000-000000000000",
+      clientSessionId: `cs-${Date.now()}`,
+    });
+    expect(res.status).toBe(422);
+  });
+});
