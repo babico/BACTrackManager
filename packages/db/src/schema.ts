@@ -217,6 +217,7 @@ export const bactrackIdentities = pgTable(
     providerUserId: uuid("provider_user_id").notNull(),
     providerOrganizationId: uuid("provider_organization_id"),
     encryptedRefresh: text("encrypted_refresh"),
+    encryptedAccess: text("encrypted_access"),
     tokenKeyVersion: integer("token_key_version").notNull().default(1),
     linkedAt: timestamp("linked_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -256,3 +257,19 @@ export const appliedMigrations = pgTable("applied_migrations", {
   name: varchar("name", { length: 128 }).primaryKey(),
   appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const refreshTokens = pgTable(
+  "refresh_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    replacedBy: uuid("replaced_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ix_refresh_user").on(t.userId)],
+);

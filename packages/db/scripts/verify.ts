@@ -6,7 +6,7 @@ if (!url) throw new Error("DATABASE_URL is required");
 const expectedTables = [
   "users", "organizations", "organization_memberships", "team_invites",
   "devices", "test_sessions", "device_leases", "bac_readings", "audit_log",
-  "bactrack_identities", "magic_links", "outbox",
+  "bactrack_identities", "magic_links", "outbox", "refresh_tokens",
 ];
 const expectedIndexes = [
   "uq_membership_org_user", "uq_session_client", "uq_lease_one_holder",
