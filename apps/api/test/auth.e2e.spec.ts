@@ -102,11 +102,11 @@ describe("refresh rotation", () => {
 });
 
 describe("guard", () => {
-  it("no token → 401, bad token → 401, missing org → 401", async () => {
+  it("no token → 401, bad token → 401, missing org → 403", async () => {
     expect((await base().get("/devices")).status).toBe(401);
     expect((await base().get("/devices").set("Authorization", "Bearer junk")).status).toBe(401);
     const { accessToken } = await magicPair(`${SUFFIX}-nog@example.com`);
-    expect((await base().get("/devices").set("Authorization", `Bearer ${accessToken}`)).status).toBe(401);
+    expect((await base().get("/devices").set("Authorization", `Bearer ${accessToken}`)).status).toBe(403);
   });
 
   it("foreign org → 403", async () => {

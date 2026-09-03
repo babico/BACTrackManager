@@ -1,5 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
-import { assertMembership } from "../identity/membership.js";
+import { assertMembership, assertUuid } from "../identity/membership.js";
 import { verifyAccess } from "./auth.service.js";
 
 @Injectable()
@@ -12,11 +12,13 @@ export class JwtAuthGuard implements CanActivate {
     }
     const { sub } = verifyAccess(header.slice(7));
     const orgId: unknown = req.headers?.["x-org-id"];
-    if (typeof orgId !== "string" || orgId.length === 0) {
-      throw new UnauthorizedException("x-org-id header is required");
+    if (typeof orgId === "string" && orgId.length > 0) {
+      assertUuid(orgId);
+      await assertMembership(orgId, sub);
+      req.user = { userId: sub, organizationId: orgId };
+      return true;
     }
-    await assertMembership(orgId, sub);
-    req.user = { userId: sub, organizationId: orgId };
+    req.user = { userId: sub, organizationId: "" };
     return true;
   }
 }

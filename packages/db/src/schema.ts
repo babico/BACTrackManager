@@ -182,6 +182,8 @@ export const bacReadings = pgTable(
     rawPayload: jsonb("raw_payload").notNull().default({}),
     measuredAt: timestamp("measured_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    acknowledgedBy: uuid("acknowledged_by").references(() => users.id, { onDelete: "set null" }),
   },
   (t) => [
     index("ix_readings_org_measured").on(t.organizationId, t.measuredAt),

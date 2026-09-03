@@ -9,6 +9,8 @@ import { ReadingsController } from "./readings/readings.controller.js";
 import { AuditController } from "./audit/audit.controller.js";
 import { AuthController } from "./auth/auth.controller.js";
 import { AuthService } from "./auth/auth.service.js";
+import { OrgsController } from "./orgs/orgs.controller.js";
+import { OrgsService } from "./orgs/orgs.service.js";
 
 @Module({
   controllers: [
@@ -19,7 +21,8 @@ import { AuthService } from "./auth/auth.service.js";
     ReadingsController,
     AuditController,
     AuthController,
+    OrgsController,
   ],
-  providers: [DevicesService, SessionsService, AuthService],
+  providers: [DevicesService, SessionsService, AuthService, OrgsService],
 })
 export class AppModule {}
