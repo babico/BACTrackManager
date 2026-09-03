@@ -3,6 +3,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "./schema.js";
 
 export * from "./schema.js";
+export { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 
 const pools = new Map<string, Pool>();
 
