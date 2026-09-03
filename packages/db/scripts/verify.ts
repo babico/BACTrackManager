@@ -16,6 +16,7 @@ const expectedIndexes = [
 let failed = 0;
 const pool = getPool(url);
 
+try {
 const { rows: tables } = await pool.query(
   "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
 );
@@ -34,7 +35,18 @@ for (const i of expectedIndexes) {
   if (!ok) failed++;
 }
 
-await closePool();
+const { rows: mig } = await pool.query("SELECT name FROM applied_migrations ORDER BY 1");
+console.log(`PASS ledger rows: ${mig.map((r) => r.name).join(",")}`);
+if (!mig.some((r) => r.name === "0001_foundation")) { console.log("FAIL ledger missing 0001_foundation"); failed++; }
+
+const { rows: ix2 } = await pool.query(
+  "SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexname='ix_readings_session'",
+);
+console.log(`${ix2.length === 1 ? "PASS" : "FAIL"} index ix_readings_session`);
+if (ix2.length !== 1) failed++;
+} finally {
+  await closePool();
+}
 if (failed > 0) {
   console.error(`${failed} check(s) FAILED`);
   process.exit(1);

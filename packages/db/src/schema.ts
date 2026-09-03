@@ -1,5 +1,4 @@
 import {
-  boolean,
   check,
   index,
   integer,
@@ -252,3 +251,8 @@ export const outbox = pgTable(
   },
   (t) => [index("ix_outbox_unpublished").on(t.publishedAt)],
 );
+
+export const appliedMigrations = pgTable("applied_migrations", {
+  name: varchar("name", { length: 128 }).primaryKey(),
+  appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
+});
