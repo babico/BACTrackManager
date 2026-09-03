@@ -12,3 +12,5 @@ dist/
 coverage/
 apps/web/.next/
 .playwright-mcp/
+apps/web/test-results/
+test-results/
