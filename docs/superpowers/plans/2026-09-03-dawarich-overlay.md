@@ -4,7 +4,7 @@
 
 **Goal:** An org connects its Dawarich instance (URL + API key, sealed at rest); the backend proxies timeline data and merges our BAC readings by day; the web map toggle shows the merged view. No Dawarich credentials ever reach the browser.
 
-**Architecture:** `dawarich_connections` (one row per org, unique). `DawarichService` calls the instance server-side with `?api_key=` (verified contract v1.9.2, design doc section 5), validates via `/api/v1/health` on connect, proxies `/api/v1/timeline?start_at&end_at` (≤31d windows, chunked server-side for longer ranges), and attaches our readings grouped by UTC date. Owner/admin only for connect/disconnect; members read merged timeline. Keys AES-GCM sealed (same helper as provider tokens). Disconnect NULLs the key (row kept for audit trail).
+**Architecture:** `dawarich_connections` is keyed by USER, not org — research (2026-09-03, searxng + official docs) proved the API key is per Dawarich account (Account section, QR code) and Family sharing is real-time-only, never historical. Each team member links their OWN Dawarich account+key; the backend merges per-user timelines for review. `DawarichService` calls the instance server-side with `?api_key=` (verified contract v1.9.2, design doc section 5), validates via `/api/v1/health` on connect, proxies `/api/v1/timeline?start_at&end_at` (≤31d windows, chunked server-side for longer ranges), and attaches our readings grouped by UTC date. Any member manages only their own link; owner/admin may additionally read the merged TEAM timeline (explicit team-review feature, documented consent on the page). Keys AES-GCM sealed (same helper as provider tokens). Disconnect NULLs the key (row kept for audit trail).
 
 **Tech Stack:** Existing. No new deps.
 
@@ -26,10 +26,11 @@
 
 Endpoint summary (Bearer + `x-org-id`):
 
-- `POST /dawarich/connect` `{baseUrl, apiKey}` → 200 `{connected:true}` / 422 unreachable-or-unhealthy (owner/admin only)
-- `GET /dawarich/status` → 200 `{connected, baseUrl}` (key never returned)
-- `DELETE /dawarich/disconnect` → 200 (owner/admin only; key wiped)
-- `GET /dawarich/timeline?from&to` (ISO dates, max 62d, chunked into ≤31d upstream calls) → 200 `{days:[{date, summary, entries, readings:[{id,bacPromille,measuredAt,origin}]}]}` / 422 not connected
+- `POST /dawarich/connect` `{baseUrl, apiKey}` → 200 `{connected:true}` / 422 unreachable-or-unhealthy (own link, any member)
+- `GET /dawarich/status` → 200 `{connected, baseUrl}` (key never returned; own link)
+- `DELETE /dawarich/disconnect` → 200 (own link; key wiped)
+- `GET /dawarich/timeline?from&to` (ISO dates, max 62d, chunked into ≤31d upstream calls) → 200 `{days:[{date, summary, entries, readings:[{id,bacPromille,measuredAt,origin}]}]}` / 422 not connected (own timeline + own org readings)
+- `GET /dawarich/team-timeline?from&to` → 200 `{users:[{userId, displayName, days:[...]}]}` (owner/admin only; one entry per member WITH a link; members without links skipped)
 
 Merge rule: readings grouped by `measuredAt` UTC date string; day matched to timeline `day.date`. Days present in either source appear (union).
 
@@ -44,28 +45,26 @@ export const dawarichConnections = pgTable(
   "dawarich_connections",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
+    userId: uuid("user_id")
       .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     baseUrl: text("base_url").notNull(),
     encryptedKey: text("encrypted_key"),
-    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("uq_dawarich_org").on(t.organizationId)],
+  (t) => [uniqueIndex("uq_dawarich_user").on(t.userId)],
 );
 ```
 
 ```sql
 CREATE TABLE IF NOT EXISTS dawarich_connections (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   base_url text NOT NULL,
   encrypted_key text,
-  created_by uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uq_dawarich_org ON dawarich_connections (organization_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_dawarich_user ON dawarich_connections (user_id);
 ```
 
 verify.ts: add `"dawarich_connections"`.
@@ -110,18 +109,21 @@ export class DawarichService {
     return getDb(process.env.DATABASE_URL as string);
   }
 
-  private async requireManager(orgId: string, userId: string): Promise<void> {
-    const role = await this.orgs.roleOf(orgId, userId);
-    if (role !== "owner" && role !== "admin") throw new ForbiddenException("owner or admin only");
-  }
-
-  private async connection(orgId: string) {
-    const rows = await this.db().select().from(dawarichConnections).where(eq(dawarichConnections.organizationId, orgId)).limit(1);
+  private async connection(userId: string) {
+    const rows = await this.db().select().from(dawarichConnections).where(eq(dawarichConnections.userId, userId)).limit(1);
     return rows.length > 0 ? rows[0] : null;
   }
 
-  async connect(orgId: string, userId: string, baseUrl: string, apiKey: string) {
-    await this.requireManager(orgId, userId);
+  private async openKey(conn: { encryptedKey: string | null }): Promise<string> {
+    if (!conn.encryptedKey) throw new UnprocessableEntityException("dawarich not connected");
+    try {
+      return open(encKey(), conn.encryptedKey);
+    } catch {
+      throw new UnprocessableEntityException("stored key unreadable");
+    }
+  }
+
+  async connect(userId: string, baseUrl: string, apiKey: string) {
     const clean = baseUrl.replace(/\/+$/, "");
     if (!/^https?:\/\/.+/.test(clean)) throw new UnprocessableEntityException("invalid base url");
     try {
@@ -131,51 +133,50 @@ export class DawarichService {
       throw new UnprocessableEntityException("dawarich unreachable or key rejected");
     }
     const db = this.db();
-    const existing = await this.connection(orgId);
+    const existing = await this.connection(userId);
     const sealed = seal(encKey(), apiKey);
     if (existing) {
-      await db.update(dawarichConnections).set({ baseUrl: clean, encryptedKey: sealed, createdBy: userId }).where(eq(dawarichConnections.id, existing.id));
+      await db.update(dawarichConnections).set({ baseUrl: clean, encryptedKey: sealed }).where(eq(dawarichConnections.id, existing.id));
     } else {
-      await db.insert(dawarichConnections).values({ organizationId: orgId, baseUrl: clean, encryptedKey: sealed, createdBy: userId });
+      await db.insert(dawarichConnections).values({ userId, baseUrl: clean, encryptedKey: sealed });
     }
     return { connected: true };
   }
 
-  async status(orgId: string) {
-    const conn = await this.connection(orgId);
+  async status(userId: string) {
+    const conn = await this.connection(userId);
     if (!conn || !conn.encryptedKey) return { connected: false, baseUrl: null };
     return { connected: true, baseUrl: conn.baseUrl };
   }
 
-  async disconnect(orgId: string, userId: string) {
-    await this.requireManager(orgId, userId);
-    await this.db().update(dawarichConnections).set({ encryptedKey: null }).where(eq(dawarichConnections.organizationId, orgId));
+  async disconnect(userId: string) {
+    await this.db().update(dawarichConnections).set({ encryptedKey: null }).where(eq(dawarichConnections.userId, userId));
     return { connected: false };
   }
 
-  async timeline(orgId: string, from: string, to: string) {
-    const conn = await this.connection(orgId);
-    if (!conn || !conn.encryptedKey) throw new UnprocessableEntityException("dawarich not connected");
+  private parseRange(from: string, to: string): { start: Date; end: Date } {
     const start = new Date(from);
     const end = new Date(to);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
       throw new UnprocessableEntityException("invalid range");
     }
-    const days = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1;
-    if (days > MAX_RANGE_DAYS) throw new UnprocessableEntityException("range too wide (max 62 days)");
-    let key: string;
-    try {
-      key = open(encKey(), conn.encryptedKey);
-    } catch {
-      throw new UnprocessableEntityException("stored key unreadable");
+    if (Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1 > MAX_RANGE_DAYS) {
+      throw new UnprocessableEntityException("range too wide (max 62 days)");
     }
+    return { start, end };
+  }
+
+  private async fetchDays(baseUrl: string, key: string, start: Date, end: Date) {
     const merged = new Map<string, { date: string; summary?: unknown; entries?: unknown[] }>();
     for (let w = new Date(start); w <= end; w = new Date(w.getTime() + WINDOW_DAYS * 86400000)) {
       const wEnd = new Date(Math.min(w.getTime() + (WINDOW_DAYS - 1) * 86400000, end.getTime()));
-      const fmt = (d: Date) => d.toISOString();
       let data: { days?: TimelineDay[] };
       try {
-        data = (await dawGet(conn.baseUrl, key, `/api/v1/timeline?start_at=${encodeURIComponent(fmt(w))}&end_at=${encodeURIComponent(fmt(wEnd))}`)) as typeof data;
+        data = (await dawGet(
+          baseUrl,
+          key,
+          `/api/v1/timeline?start_at=${encodeURIComponent(w.toISOString())}&end_at=${encodeURIComponent(wEnd.toISOString())}`,
+        )) as typeof data;
       } catch {
         throw new UnprocessableEntityException("dawarich request failed");
       }
@@ -183,25 +184,86 @@ export class DawarichService {
         merged.set(d.date, { date: d.date, summary: d.summary, entries: d.entries ?? [] });
       }
     }
-    const db = this.db();
-    const readings = await db
+    return merged;
+  }
+
+  async timeline(userId: string, organizationId: string, from: string, to: string) {
+    const conn = await this.connection(userId);
+    if (!conn) throw new UnprocessableEntityException("dawarich not connected");
+    const key = await this.openKey(conn);
+    const { start, end } = this.parseRange(from, to);
+    const merged = await this.fetchDays(conn.baseUrl, key, start, end);
+    attachReadings(merged, await this.readingsFor(organizationId, userId, start, end));
+    return { days: sortedDays(merged) };
+  }
+
+  async teamTimeline(orgId: string, managerId: string, from: string, to: string) {
+    const role = await this.orgs.roleOf(orgId, managerId);
+    if (role !== "owner" && role !== "admin") throw new ForbiddenException("owner or admin only");
+    const { start, end } = this.parseRange(from, to);
+    const members = await this.orgs.members(orgId);
+    const usersOut: { userId: string; displayName: string; days: unknown[] }[] = [];
+    for (const m of members.members) {
+      const conn = await this.connection(m.userId);
+      if (!conn) continue;
+      let key: string;
+      try {
+        key = await this.openKey(conn);
+      } catch {
+        continue;
+      }
+      let merged: Map<string, { date: string; summary?: unknown; entries?: unknown[] }>;
+      try {
+        merged = await this.fetchDays(conn.baseUrl, key, start, end);
+      } catch {
+        continue;
+      }
+      attachReadings(merged, await this.readingsFor(orgId, m.userId, start, end));
+      usersOut.push({ userId: m.userId, displayName: m.displayName, days: sortedDays(merged) });
+    }
+    return { users: usersOut };
+  }
+
+  private async readingsFor(organizationId: string, subjectUserId: string, start: Date, end: Date) {
+    return this.db()
       .select({ id: bacReadings.id, bac: bacReadings.bacPromille, at: bacReadings.measuredAt, origin: bacReadings.origin })
       .from(bacReadings)
-      .where(and(eq(bacReadings.organizationId, orgId), gte(bacReadings.measuredAt, start), lte(bacReadings.measuredAt, end)))
+      .where(
+        and(
+          eq(bacReadings.organizationId, organizationId),
+          eq(bacReadings.subjectUserId, subjectUserId),
+          gte(bacReadings.measuredAt, start),
+          lte(bacReadings.measuredAt, end),
+        ),
+      )
       .orderBy(desc(bacReadings.measuredAt));
-    for (const r of readings) {
-      const day = r.at.toISOString().slice(0, 10);
-      const existing = merged.get(day) ?? { date: day };
-      merged.set(day, { ...existing, readings: [...((existing as { readings?: unknown[] }).readings ?? []), { id: r.id, bacPromille: r.bac, measuredAt: r.at, origin: r.origin }] });
-    }
-    return { days: [...merged.values()].sort((a, b) => (a.date < b.date ? -1 : 1)) };
   }
+}
+
+type DayBucket = { date: string; summary?: unknown; entries?: unknown[]; readings?: unknown[] };
+
+function attachReadings(
+  merged: Map<string, { date: string; summary?: unknown; entries?: unknown[] }>,
+  readings: { id: string; bac: string; at: Date; origin: string }[],
+): void {
+  for (const r of readings) {
+    const day = r.at.toISOString().slice(0, 10);
+    const existing = (merged.get(day) ?? { date: day }) as DayBucket;
+    merged.set(day, {
+      ...existing,
+      readings: [...(existing.readings ?? []), { id: r.id, bacPromille: r.bac, measuredAt: r.at, origin: r.origin }],
+    });
+  }
+}
+
+function sortedDays(merged: Map<string, { date: string; summary?: unknown; entries?: unknown[] }>) {
+  return [...merged.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 ```
 
-- [ ] **Step 3: Controller** (`POST /dawarich/connect` + `@HttpCode(200)`, `GET /dawarich/status`, `DELETE /dawarich/disconnect`, `GET /dawarich/timeline?from&to`), all `@UseGuards(JwtAuthGuard)`, membership assert, zod bodies. Module wiring.
+- [ ] **Step 3: Controller** (`POST /dawarich/connect` + `@HttpCode(200)`, `GET /dawarich/status`, `DELETE /dawarich/disconnect`, `GET /dawarich/timeline?from&to`, `GET /dawarich/team-timeline?from&to`), all `@UseGuards(JwtAuthGuard)`, membership assert via guard+controller (connect/status/disconnect/timeline bind the CALLER's userId; team-timeline additionally asserts membership then delegates role check to service). Module wiring.
 
-- [ ] **Step 4: Tests first** — `test/dawarich.e2e.spec.ts`: mock fetch routing on URL (`/health` → `{status:"ok"}` or 500 for fail case; `/timeline` → `{days:[{date:"2026-09-01",summary:{},entries:[{type:"visit"}]}]}`). Matrix: connect ok → status shows baseUrl, no key leaked; connect with dead instance → 422; timeline merges a managed reading from same day (create device+session+complete via HTTP first) → day has entries + readings; disconnect → status false, timeline 422; viewer connect → 403. Unstub after each.
+- [ ] **Step 4: Tests first** — `test/dawarich.e2e.spec.ts`: mock fetch routing on URL (`/health` → `{status:"ok"}` or 500 for fail case; `/timeline` → `{days:[{date:"2026-09-01",summary:{},entries:[{type:"visit"}]}]}`). Matrix: connect ok → status shows baseUrl, no key leaked; connect with dead instance → 422; timeline merges a managed reading from same day (create device+session+complete via HTTP first) → day has entries + readings; second user without link gets 422 on own timeline; disconnect → status false, timeline 422; team-timeline as owner shows linked member bucket with readings, skips unlinked; viewer team-timeline → 403. Unstub after each.
 
 - [ ] **Step 5: Migrate + verify + suite + commit** `feat(api): dawarich overlay with merged timeline`.
 
