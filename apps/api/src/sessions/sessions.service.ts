@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
-import { and, deviceLeases, devices, eq, getDb, organizationMemberships, sql, testSessions } from "@bactrack/db";
+import { and, bacReadings, deviceLeases, devices, eq, getDb, organizationMemberships, sql, testSessions } from "@bactrack/db";
 import { appendAudit } from "../common/audit.js";
 import { publishOutbox } from "../common/outbox.js";
 
@@ -166,8 +166,95 @@ export class SessionsService {
     });
   }
 
-  async breakGlassRelease(organizationId: string, actorUserId: string, deviceId: string) {
+  async complete(input: {
+    organizationId: string;
+    actorUserId: string;
+    id: string;
+    bacPromille: number;
+    measuredAt: string;
+    rawPayload?: Record<string, unknown>;
+  }) {
+    if (!Number.isFinite(input.bacPromille) || input.bacPromille < 0 || input.bacPromille > 10) {
+      throw new UnprocessableEntityException("bacPromille out of range 0-10");
+    }
+    const measuredAt = new Date(input.measuredAt);
+    if (Number.isNaN(measuredAt.getTime())) {
+      throw new UnprocessableEntityException("measuredAt is not a valid date");
+    }
     const db = this.db();
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM test_sessions WHERE id = ${input.id} FOR UPDATE`);
+      const rows = await tx
+        .select()
+        .from(testSessions)
+        .where(
+          and(eq(testSessions.id, input.id), eq(testSessions.organizationId, input.organizationId)),
+        )
+        .limit(1);
+      if (rows.length === 0) throw new NotFoundException("session not found");
+      const session = rows[0];
+      if (session.status === "completed") {
+        const existing = await tx
+          .select()
+          .from(bacReadings)
+          .where(eq(bacReadings.sessionId, session.id))
+          .limit(1);
+        return { reading: existing[0], duplicate: true };
+      }
+      if ((TERMINAL as readonly string[]).includes(session.status)) {
+        throw new ConflictException(`session already ${session.status}`);
+      }
+      if (session.expiresAt.getTime() < Date.now()) {
+        throw new ConflictException("session expired");
+      }
+      const deviceSn = (
+        await tx
+          .select({ sn: devices.serialNumber })
+          .from(devices)
+          .where(eq(devices.id, session.deviceId))
+          .limit(1)
+      )[0].sn;
+      const [reading] = await tx
+        .insert(bacReadings)
+        .values({
+          sessionId: session.id,
+          organizationId: input.organizationId,
+          bacPromille: input.bacPromille.toFixed(3),
+          deviceSerial: deviceSn,
+          operatorUserId: session.operatorUserId,
+          subjectUserId: session.subjectUserId,
+          origin: "managed",
+          rawPayload: input.rawPayload ?? {},
+          measuredAt,
+        })
+        .returning();
+      await tx
+        .update(testSessions)
+        .set({ status: "completed", updatedAt: new Date() })
+        .where(eq(testSessions.id, session.id));
+      await tx
+        .update(deviceLeases)
+        .set({ releasedAt: new Date() })
+        .where(and(eq(deviceLeases.sessionId, session.id), sql`released_at IS NULL`));
+      await appendAudit(tx, {
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        action: "reading.recorded",
+        entityType: "reading",
+        entityId: reading.id,
+        details: { sessionId: session.id, bacPromille: input.bacPromille },
+      });
+      await publishOutbox(tx, {
+        aggregateType: "session",
+        aggregateId: session.id,
+        eventType: "session.completed",
+        payload: { readingId: reading.id, bacPromille: input.bacPromille },
+      });
+      return { reading, duplicate: false };
+    });
+  }
+
+  async breakGlassRelease(organizationId: string, actorUserId: string, deviceId: string) {    const db = this.db();
     const leases = await db
       .select()
       .from(deviceLeases)

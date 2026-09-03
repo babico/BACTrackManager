@@ -89,3 +89,44 @@ describe("sessions and leases", () => {
     expect(res.status).toBe(422);
   });
 });
+
+describe("completion and readings", () => {
+  it("completes a session into exactly one reading, retry is duplicate", async () => {
+    const sn = `CMP-${Date.now()}`;
+    const dev = await api().post("/devices").send({ serialNumber: sn });
+    await api().patch(`/devices/${dev.body.id}`).send({ status: "active" });
+    const sess = await api().post("/sessions").send({
+      deviceId: dev.body.id,
+      subjectUserId: subjectId,
+      clientSessionId: `cs-${Date.now()}`,
+    });
+    const payload = { bacPromille: 0.42, measuredAt: new Date().toISOString(), rawPayload: { fake: true } };
+    const first = await api().post(`/sessions/${sess.body.session.id}/complete`).send(payload);
+    expect(first.status).toBe(200);
+    expect(first.body.duplicate).toBe(false);
+    const readingId = first.body.reading.id;
+    const second = await api().post(`/sessions/${sess.body.session.id}/complete`).send(payload);
+    expect(second.status).toBe(200);
+    expect(second.body.duplicate).toBe(true);
+    expect(second.body.reading.id).toBe(readingId);
+    const list = await api().get(`/readings?subjectUserId=${subjectId}`);
+    const mine = list.body.readings.filter((r: { id: string }) => r.id === readingId);
+    expect(mine).toHaveLength(1);
+  });
+
+  it("refuses completion of expired sessions with 409", async () => {
+    const sn = `EXP-${Date.now()}`;
+    const dev = await api().post("/devices").send({ serialNumber: sn });
+    await api().patch(`/devices/${dev.body.id}`).send({ status: "active" });
+    const sess = await api().post("/sessions").send({
+      deviceId: dev.body.id,
+      subjectUserId: subjectId,
+      clientSessionId: `cs-${Date.now()}`,
+    });
+    await api().post(`/sessions/${sess.body.session.id}/expire`);
+    const res = await api()
+      .post(`/sessions/${sess.body.session.id}/complete`)
+      .send({ bacPromille: 0.1, measuredAt: new Date().toISOString() });
+    expect(res.status).toBe(409);
+  });
+});
