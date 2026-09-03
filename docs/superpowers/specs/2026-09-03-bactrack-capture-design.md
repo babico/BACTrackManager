@@ -177,7 +177,17 @@ are outdated; this capture supersedes them for the import path.
   untrusted-client data: separate origin flag, raw payload retained,
   idempotency on provider `id`.
 
-## 10. Auth strategy: hybrid (approved)
+## 10. Auth strategy: hybrid (approved, IMPLEMENTED 2026-09-03)
+
+Status: live. `POST /auth/magic/start`, `GET /auth/magic/consume`,
+`POST /auth/bactrack/start`, `GET /auth/bactrack/callback`,
+`POST /auth/refresh` (rotation + reuse-kill), `POST /auth/logout`,
+`GET /auth/me`, `DELETE /auth/bactrack` (wipes ciphertext). All capture
+routes behind `JwtAuthGuard` (Bearer + `x-org-id` + membership). 24/24
+tests green. BACtrack callback live-unverified (mocked tests only);
+run the section-8 loopback/refresh probes with a throwaway account
+before relying on provider login. Provider IDs stored as text (uuid
+not guaranteed).
 
 - Primary: "Sign in with BACtrack" via Auth0 PKCE against
   `login.bactrack.com` (flow in section 8). System browser only; our code

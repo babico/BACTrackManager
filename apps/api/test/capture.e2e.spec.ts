@@ -2,14 +2,27 @@ import { INestApplication } from "@nestjs/common";
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { closePool, getDb, users, organizations, organizationMemberships } from "@bactrack/db";
+import { AuthService } from "../src/auth/auth.service.js";
 import { createTestApp } from "./bootstrap.js";
 
 let app: INestApplication;
-const api = () => request(app.getHttpServer());
 
 let orgId = "";
 let operatorId = "";
 let subjectId = "";
+let bearer = "";
+let orgHeader = "";
+
+const api = () => {
+  const base = request(app.getHttpServer());
+  const auth = <T extends { set(k: string, v: string): T }>(r: T): T =>
+    r.set("Authorization", bearer).set("x-org-id", orgHeader);
+  return {
+    get: (p: string) => auth(base.get(p)),
+    post: (p: string) => auth(base.post(p)),
+    patch: (p: string) => auth(base.patch(p)),
+  };
+};
 
 beforeAll(async () => {
   app = await createTestApp();
@@ -32,8 +45,10 @@ beforeAll(async () => {
   };
   operatorId = await mkUser("op@example.com", "Op");
   subjectId = await mkUser("sub@example.com", "Sub");
-  process.env.DEV_USER_ID = operatorId;
-  process.env.DEV_ORG_ID = orgId;
+  const svc: AuthService = app.get(AuthService);
+  const minted = await svc.mintPair(operatorId);
+  bearer = `Bearer ${minted.accessToken}`;
+  orgHeader = orgId;
 });
 
 afterAll(async () => {

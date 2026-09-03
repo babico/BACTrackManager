@@ -14,6 +14,7 @@ import {
   organizationMemberships,
   organizations,
   refreshTokens,
+  sql,
   users,
 } from "@bactrack/db";
 import { hashToken, newOpaqueToken } from "./tokens.js";
@@ -394,7 +395,12 @@ export class AuthService {
     const linked = await db
       .select({ id: bactrackIdentities.id })
       .from(bactrackIdentities)
-      .where(eq(bactrackIdentities.userId, userId))
+      .where(
+        and(
+          eq(bactrackIdentities.userId, userId),
+          sql`encrypted_access IS NOT NULL`,
+        ),
+      )
       .limit(1);
     return {
       user: { id: u.id, email: u.email, displayName: u.displayName },

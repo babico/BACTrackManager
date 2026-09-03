@@ -214,8 +214,8 @@ export const bactrackIdentities = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    providerUserId: uuid("provider_user_id").notNull(),
-    providerOrganizationId: uuid("provider_organization_id"),
+    providerUserId: text("provider_user_id").notNull(),
+    providerOrganizationId: text("provider_organization_id"),
     encryptedRefresh: text("encrypted_refresh"),
     encryptedAccess: text("encrypted_access"),
     tokenKeyVersion: integer("token_key_version").notNull().default(1),
