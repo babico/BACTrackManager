@@ -1,17 +1,22 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
+  Optional,
   UnprocessableEntityException,
 } from "@nestjs/common";
-import { and, bacReadings, deviceLeases, devices, eq, getDb, organizationMemberships, sql, testSessions } from "@bactrack/db";
+import { and, bacReadings, deviceLeases, devices, eq, getDb, organizationMemberships, sql, testSessions, users } from "@bactrack/db";
 import { appendAudit } from "../common/audit.js";
 import { publishOutbox } from "../common/outbox.js";
+import { PushService } from "../push/push.service.js";
 
 const TERMINAL = ["completed", "failed", "expired"] as const;
 
 @Injectable()
 export class SessionsService {
+  constructor(@Optional() @Inject(PushService) private readonly push?: PushService) {}
+
   private db() {
     return getDb(process.env.DATABASE_URL as string);
   }
@@ -182,7 +187,7 @@ export class SessionsService {
       throw new UnprocessableEntityException("measuredAt is not a valid date");
     }
     const db = this.db();
-    return db.transaction(async (tx) => {
+    const outcome = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT id FROM test_sessions WHERE id = ${input.id} FOR UPDATE`);
       const rows = await tx
         .select()
@@ -252,6 +257,35 @@ export class SessionsService {
       });
       return { reading, duplicate: false };
     });
+    if (!outcome.duplicate) {
+      await this.fanOut(input.organizationId, outcome);
+    }
+    return outcome;
+  }
+
+  private async fanOut(
+    orgId: string,
+    outcome: { reading: { id: string; subjectUserId: string; operatorUserId: string; bacPromille: string } },
+  ): Promise<void> {
+    if (!this.push) return;
+    try {
+      const db = this.db();
+      const subjectRows = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, outcome.reading.subjectUserId))
+        .limit(1);
+      await this.push.notifyReading({
+        organizationId: orgId,
+        operatorUserId: outcome.reading.operatorUserId,
+        subjectUserId: outcome.reading.subjectUserId,
+        subjectEmail: subjectRows[0]?.email ?? outcome.reading.subjectUserId,
+        bacPromille: Number(outcome.reading.bacPromille),
+        readingId: outcome.reading.id,
+      });
+    } catch {
+      // best effort: never fail completion on push
+    }
   }
 
   async breakGlassRelease(organizationId: string, actorUserId: string, deviceId: string) {    const db = this.db();

@@ -16,6 +16,8 @@ import { ImportsService } from "./imports/imports.service.js";
 import { DawarichController } from "./dawarich/dawarich.controller.js";
 import { DawarichService } from "./dawarich/dawarich.service.js";
 import { ExportsController } from "./exports/exports.controller.js";
+import { PushController } from "./push/push.controller.js";
+import { PushService } from "./push/push.service.js";
 
 @Module({
   controllers: [
@@ -30,7 +32,17 @@ import { ExportsController } from "./exports/exports.controller.js";
     ImportsController,
     DawarichController,
     ExportsController,
+    PushController,
   ],
-  providers: [DevicesService, SessionsService, AuthService, OrgsService, ImportsService, DawarichService],
+  providers: [
+    DevicesService,
+    SessionsService,
+    AuthService,
+    OrgsService,
+    ImportsService,
+    DawarichService,
+    PushService,
+    { provide: "PUSH_TRANSPORT", useValue: null },
+  ],
 })
 export class AppModule {}
