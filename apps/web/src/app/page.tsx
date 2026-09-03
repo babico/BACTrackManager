@@ -74,7 +74,7 @@ export default function HistoryPage() {
           e.preventDefault();
           void load();
         }}
-        style={{ display: "flex", gap: 8, marginBottom: 16 }}
+       
       >
         <select value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject">
           <option value="">All subjects</option>

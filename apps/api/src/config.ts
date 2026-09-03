@@ -14,6 +14,7 @@ const schema = z.object({
   BACTRACK_AUDIENCE: z.string().default("https://api.bactrack.com"),
   BACTRACK_API: z.string().url().default("https://consumer-api.bactrack.com"),
   ALLOW_DEV_MAGIC_TOKEN: z.coerce.boolean().default(false),
+  ALLOWED_ORIGINS: z.string().default("http://127.0.0.1:3100,http://localhost:3100"),
 });
 
 export type AppConfig = z.infer<typeof schema>;

@@ -43,7 +43,7 @@ export default function DevicesPage() {
             })
             .catch(() => setError("Register failed (duplicate serial?)."));
         }}
-        style={{ display: "flex", gap: 8, marginBottom: 16 }}
+       
       >
         <input placeholder="Serial number" value={serial} onChange={(e) => setSerial(e.target.value)} required />
         <button type="submit">Register C6</button>
@@ -63,7 +63,7 @@ export default function DevicesPage() {
               <td>{d.serialNumber}</td>
               <td>{d.model}</td>
               <td>{d.status}</td>
-              <td style={{ display: "flex", gap: 4 }}>
+              <td>
                 {d.status === "provisioned" ? (
                   <button onClick={() => apiPatch(`/devices/${d.id}`, { status: "active" }).then(() => void load())}>
                     Activate

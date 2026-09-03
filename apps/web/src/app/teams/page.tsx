@@ -73,7 +73,7 @@ export default function TeamsPage() {
             })
             .catch(() => setError("Invite failed (owner/admin only)."));
         }}
-        style={{ display: "flex", gap: 8 }}
+       
       >
         <input type="email" required placeholder="teammate@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role">

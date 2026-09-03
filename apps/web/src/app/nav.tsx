@@ -5,9 +5,9 @@ import { useAuth } from "./auth-context";
 
 export function Nav() {
   const { user, orgs, orgId, ready, selectOrg, logout } = useAuth();
-  if (!ready) return <nav style={{ padding: 12, borderBottom: "1px solid #ddd" }}>…</nav>;
+  if (!ready) return <nav>…</nav>;
   return (
-    <nav style={{ padding: 12, borderBottom: "1px solid #ddd", display: "flex", gap: 16, alignItems: "center" }}>
+    <nav>
       <strong>BACTrack</strong>
       {user ? (
         <>

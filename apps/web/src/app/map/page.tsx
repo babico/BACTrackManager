@@ -94,7 +94,7 @@ export default function MapPage() {
   return (
     <div>
       <h1>Map</h1>
-      <p>{readings.length} readings loaded (markers need coordinates — captured from P6 mobile GPS).</p>
+      <p>{readings.length} readings loaded (map markers need GPS coordinates from mobile capture).</p>
 
       <h2>Dawarich overlay</h2>
       {connected === null ? <p>Checking…</p> : null}
@@ -110,7 +110,7 @@ export default function MapPage() {
               })
               .catch(() => setMsg("Connect failed — check URL and API key (Dawarich account settings)."));
           }}
-          style={{ display: "flex", gap: 8, marginBottom: 12 }}
+         
         >
           <input placeholder="https://dawarich.example.com" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required />
           <input placeholder="API key (your Dawarich account)" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
@@ -118,7 +118,7 @@ export default function MapPage() {
         </form>
       ) : null}
       {connected ? (
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <div>
           <button onClick={() => void loadTimeline()}>Load last 7 days</button>
           <DisconnectButton onDone={() => { setDays([]); setTeam([]); void refreshStatus(); }} />
         </div>
@@ -160,7 +160,7 @@ export default function MapPage() {
         </>
       ) : null}
 
-      <div id="bac-map" style={{ height: 480, marginTop: 12 }} />
+      <div id="bac-map" />
     </div>
   );
 }

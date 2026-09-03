@@ -29,7 +29,7 @@ export default function AuditPage() {
   return (
     <div>
       <h1>Audit log</h1>
-      <form onSubmit={(e) => { e.preventDefault(); void load(); }} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <form onSubmit={(e) => { e.preventDefault(); void load(); }}>
         <select value={entityType} onChange={(e) => setEntityType(e.target.value)} aria-label="Entity type">
           <option value="">All types</option>
           <option value="session">session</option>
