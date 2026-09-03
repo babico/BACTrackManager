@@ -16,6 +16,7 @@ export function Nav() {
           <Link href="/teams">Teams</Link>
           <Link href="/audit">Audit</Link>
           <Link href="/map">Map</Link>
+          <Link href="/kiosk">Kiosk</Link>
           <select value={orgId ?? ""} onChange={(e) => selectOrg(e.target.value)} aria-label="Organization">
             {orgs.map((o) => (
               <option key={o.id} value={o.id}>

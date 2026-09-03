@@ -52,7 +52,7 @@ function mockDawarich() {
 beforeAll(async () => {
   app = await createTestApp();
   const db = getDb(process.env.DATABASE_URL as string);
-  const suffix = Date.now().toString(36);
+  const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const [org] = await db.insert(organizations).values({ type: "team", name: `daw-${suffix}` }).returning({ id: organizations.id });
   orgId = org.id;
   const mkUser = async (email: string, role: "owner" | "viewer" | "operator") => {

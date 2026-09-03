@@ -27,7 +27,7 @@ const api = () => {
 beforeAll(async () => {
   app = await createTestApp();
   const db = getDb(process.env.DATABASE_URL as string);
-  const suffix = Date.now().toString(36);
+  const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const [org] = await db
     .insert(organizations)
     .values({ type: "team", name: `e2e-${suffix}` })

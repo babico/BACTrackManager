@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 const API = process.env.API_BASE ?? "http://127.0.0.1:3001";
 const stamp = Date.now().toString(36);
 
-async function loginAs(page: Parameters<Parameters<typeof test>[1]>[0], email: string): Promise<void> {
+async function loginAs(page: Page, email: string): Promise<void> {
   const started = await page.request.post(`${API}/auth/magic/start`, { data: { email } });
   expect(started.ok()).toBeTruthy();
   const body = (await started.json()) as { devToken?: string };

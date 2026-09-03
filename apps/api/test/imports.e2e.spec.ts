@@ -25,7 +25,7 @@ const authed = (token: string, org: string = orgId) => {
   };
 };
 
-const RUN_TAG = Date.now().toString(36);
+const RUN_TAG = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const gen = (n: number, prefix: string) =>
   Array.from({ length: n }, (_, i) => ({
     id: `${RUN_TAG}-${prefix}-${i}`,
@@ -51,7 +51,7 @@ function mockPages() {
 beforeAll(async () => {
   app = await createTestApp();
   const db = getDb(process.env.DATABASE_URL as string);
-  const suffix = Date.now().toString(36);
+  const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const svc: AuthService = app.get(AuthService);
   const mkUser = async (email: string) => {
     const { user } = await svc.registerOrLogin({ email: `${suffix}-${email}`, displayName: email });

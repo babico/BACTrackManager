@@ -33,6 +33,35 @@ export default function HistoryPage() {
   const [to, setTo] = useState("");
   const [error, setError] = useState("");
 
+  const download = (format: "csv" | "pdf") => {
+    const q = new URLSearchParams();
+    if (subject) q.set("subjectUserId", subject);
+    if (from) q.set("from", new Date(from).toISOString());
+    if (to) q.set("to", new Date(to).toISOString());
+    const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:3001";
+    const access = localStorage.getItem("bactrack.access");
+    const org = localStorage.getItem("bactrack.org");
+    fetch(`${base}/exports/readings.${format}?${q.toString()}`, {
+      headers: {
+        ...(access ? { Authorization: `Bearer ${access}` } : {}),
+        ...(org ? { "x-org-id": org } : {}),
+      },
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("export failed");
+        return r.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `readings.${format}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => setError("Export failed."));
+  };
+
   const load = useCallback(async () => {
     try {
       const q = new URLSearchParams({ limit: "200" });
@@ -87,6 +116,12 @@ export default function HistoryPage() {
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" />
         <button type="submit">Filter</button>
+        <button type="button" onClick={() => download("csv")}>
+          CSV
+        </button>
+        <button type="button" onClick={() => download("pdf")}>
+          PDF
+        </button>
       </form>
       {error ? <p>{error}</p> : null}
       <table>

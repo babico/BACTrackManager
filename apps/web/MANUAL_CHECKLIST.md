@@ -12,3 +12,9 @@ Web: `NEXT_PUBLIC_API_BASE=http://<host>:3001 pnpm --filter @bactrack/web dev` (
 - [ ] Map: OSM tiles load; count text matches readings; Dawarich toggle shows stub note.
 - [ ] Org switcher: two orgs → switching changes history scope.
 - [ ] Logout → /login; old refresh rejected.
+
+## Kiosk + push (P9)
+
+- [ ] Kiosk: open /kiosk, wrong PIN rejected, correct PIN (NEXT_PUBLIC_KIOSK_PIN or 1234) unlocks; pick active device + subject → session starts, status polls; blow completes from mobile/API; status clears on terminal.
+- [ ] Exports: history CSV/PDF buttons download with current filters.
+- [ ] Push: set NEXT_PUBLIC_VAPID_PUBLIC to the backend VAPID_PUBLIC, rebuild, Teams → Enable push → subscription appears in GET /push/subscriptions; complete a reading as another operator → notification arrives (Chrome desktop).

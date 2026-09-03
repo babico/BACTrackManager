@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 
+function vapidKey(): string {
+  return process.env.NEXT_PUBLIC_VAPID_PUBLIC ?? "";
+}
+
 interface Member {
   userId: string;
   email: string;
@@ -91,6 +95,33 @@ export default function TeamsPage() {
           </li>
         ))}
       </ul>
+      <h2>Push notifications</h2>
+      <button
+        onClick={() => {
+          if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+            setError("Push not supported in this browser.");
+            return;
+          }
+          const key = vapidKey();
+          if (!key) {
+            setError("Push not configured (VAPID key missing).");
+            return;
+          }
+          Notification.requestPermission()
+            .then((perm) => {
+              if (perm !== "granted") throw new Error("denied");
+              return navigator.serviceWorker.register("/sw.js");
+            })
+            .then((reg) => reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }))
+            .then((sub) =>
+              apiPost("/push/subscriptions", { endpoint: sub.endpoint, keys: sub.toJSON().keys }),
+            )
+            .then(() => setError(""))
+            .catch(() => setError("Push subscribe failed."));
+        }}
+      >
+        Enable push notifications
+      </button>
     </div>
   );
 }
