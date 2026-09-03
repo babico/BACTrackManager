@@ -1,0 +1,17 @@
+{
+  "name": "bactrack-manager",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "dev": "turbo run dev --parallel",
+    "db:generate": "pnpm --filter @bactrack/db db:generate",
+    "db:migrate": "pnpm --filter @bactrack/db db:migrate",
+    "db:verify": "pnpm --filter @bactrack/db db:verify"
+  },
+  "devDependencies": { "turbo": "^2.5.0", "typescript": "^5.6.3" },
+  "engines": { "node": ">=20", "pnpm": ">=9" }
+}
