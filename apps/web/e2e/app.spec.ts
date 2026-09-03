@@ -19,8 +19,9 @@ test("login page renders magic form", async ({ page }) => {
 });
 
 test("magic login lands on history", async ({ page }) => {
-  await loginAs(page, `${stamp}-pw@example.com`);
-  await expect(page.getByText(`Logged in as`, { exact: false })).toBeVisible();
+  const email = `${stamp}-pw@example.com`;
+  await loginAs(page, email);
+  await expect(page.getByRole("navigation").getByText(email)).toBeVisible();
 });
 
 test("devices page registers a C6", async ({ page }) => {
@@ -37,7 +38,7 @@ test("devices page registers a C6", async ({ page }) => {
 test("teams page shows self as member", async ({ page }) => {
   await loginAs(page, `${stamp}-pwteam@example.com`);
   await page.goto("/teams");
-  await expect(page.getByText(`${stamp}-pwteam@example.com`)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("cell", { name: `${stamp}-pwteam@example.com` })).toBeVisible({ timeout: 15000 });
 });
 
 test("map page loads with dawarich section", async ({ page }) => {
