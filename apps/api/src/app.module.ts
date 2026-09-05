@@ -1,4 +1,7 @@
-import { Module } from "@nestjs/common";
+import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import helmet from "helmet";
 import { HealthController } from "./health/health.controller.js";
 import { DevicesController } from "./devices/devices.controller.js";
 import { DevicesService } from "./devices/devices.service.js";
@@ -20,6 +23,12 @@ import { PushController } from "./push/push.controller.js";
 import { PushService } from "./push/push.service.js";
 
 @Module({
+  imports: [
+    ThrottlerModule.forRoot([
+      { name: "default", limit: 200, ttl: 60000 },
+      { name: "auth", limit: 20, ttl: 60000 },
+    ]),
+  ],
   controllers: [
     HealthController,
     DevicesController,
@@ -43,6 +52,11 @@ import { PushService } from "./push/push.service.js";
     DawarichService,
     PushService,
     { provide: "PUSH_TRANSPORT", useValue: null },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(helmet()).forRoutes("*");
+  }
+}

@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { z } from "zod";
 import { CurrentUser, OrgContext } from "../identity/current-user.js";
 import { parseBody } from "../common/zod-body.js";
@@ -26,12 +27,14 @@ export class AuthController {
 
   @Post("magic/start")
   @HttpCode(200)
+  @Throttle({ auth: { limit: 20, ttl: 60000 } })
   async magicStart(@Body() body: unknown) {
     const dto = parseBody(emailSchema, body);
     return this.auth.magicStart(dto.email);
   }
 
   @Get("magic/consume")
+  @Throttle({ auth: { limit: 20, ttl: 60000 } })
   async magicConsume(@Query("token") token: string) {
     if (!token) throw new BadRequestException("token is required");
     const { pair, user } = await this.auth.magicConsume(token);
@@ -40,12 +43,14 @@ export class AuthController {
 
   @Post("bactrack/start")
   @HttpCode(200)
+  @Throttle({ auth: { limit: 20, ttl: 60000 } })
   async bactrackStart(@Body() body: unknown) {
     const dto = parseBody(startSchema, body);
     return this.auth.bactrackStart(dto.redirectUri);
   }
 
   @Get("bactrack/callback")
+  @Throttle({ auth: { limit: 20, ttl: 60000 } })
   async bactrackCallback(
     @Query("code") code: string,
     @Query("state") state: string,
@@ -60,6 +65,7 @@ export class AuthController {
 
   @Post("refresh")
   @HttpCode(200)
+  @Throttle({ auth: { limit: 20, ttl: 60000 } })
   async refresh(@Body() body: unknown) {
     const dto = parseBody(refreshSchema, body);
     return this.auth.refresh(dto.refreshToken);

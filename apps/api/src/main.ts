@@ -1,5 +1,6 @@
 import "dotenv/config";
 import "reflect-metadata";
+import { json } from "express";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module.js";
 import { HttpErrorFilter } from "./common/http-error.filter.js";
@@ -8,6 +9,7 @@ import { loadConfig } from "./config.js";
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
   const app = await NestFactory.create(AppModule);
+  app.use(json({ limit: "256kb" }));
   app.useGlobalFilters(new HttpErrorFilter());
   app.enableCors({
     origin: config.ALLOWED_ORIGINS.split(",").map((o) => o.trim()),
