@@ -19,6 +19,7 @@ interface AuthState {
   ready: boolean;
   login(email: string): Promise<{ devToken?: string }>;
   consume(token: string): Promise<void>;
+  challenge(code: string): Promise<void>;
   selectOrg(id: string): void;
   logout(): Promise<void>;
 }
@@ -64,9 +65,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const consume = useCallback(
     async (token: string) => {
-      const res = await apiGet<{ accessToken: string; refreshToken: string; user: SessionUser }>(
-        `/auth/magic/consume?token=${encodeURIComponent(token)}`,
-      );
+      const res = await apiGet<
+        | { accessToken: string; refreshToken: string; user: SessionUser }
+        | { pair: { accessToken: string; refreshToken: string }; user: SessionUser }
+        | { mfaRequired: true; mfaTicket: string }
+      >(`/auth/magic/consume?token=${encodeURIComponent(token)}`);
+      if ("mfaRequired" in res) {
+        sessionStorage.setItem("bactrack.mfa", res.mfaTicket);
+        router.push("/mfa");
+        return;
+      }
+      const pair = "pair" in res ? res.pair : res;
+      const user = (res as { user: SessionUser }).user;
+      sessionStore.save({ accessToken: pair.accessToken, refreshToken: pair.refreshToken });
+      await loadMe();
+      router.push("/");
+    },
+    [loadMe, router],
+  );
+
+  const challenge = useCallback(
+    async (code: string) => {
+      const ticket = sessionStorage.getItem("bactrack.mfa");
+      if (!ticket) throw new Error("no challenge pending");
+      const res = await apiPost<{ accessToken: string; refreshToken: string; user: SessionUser }>("/auth/mfa/challenge", {
+        ticket,
+        code,
+      });
+      sessionStorage.removeItem("bactrack.mfa");
       sessionStore.save({ accessToken: res.accessToken, refreshToken: res.refreshToken });
       await loadMe();
       router.push("/");
@@ -96,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <Ctx.Provider value={{ user, orgs, orgId, ready, login, consume, selectOrg, logout }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ user, orgs, orgId, ready, login, consume, challenge, selectOrg, logout }}>{children}</Ctx.Provider>
   );
 }
 

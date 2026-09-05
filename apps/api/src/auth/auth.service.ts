@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   UnauthorizedException,
   UnprocessableEntityException,
@@ -19,6 +20,7 @@ import {
 } from "@bactrack/db";
 import { hashToken, newOpaqueToken } from "./tokens.js";
 import { open, seal } from "./crypto.js";
+import { MfaService } from "./mfa.service.js";
 
 const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_MS = 30 * 24 * 3600 * 1000;
@@ -105,6 +107,8 @@ const pendingPkce = new Map<string, { verifier: string; redirectUri: string; exp
 
 @Injectable()
 export class AuthService {
+  constructor(@Inject(MfaService) private readonly mfa: MfaService) {}
+
   private db() {
     return getDb(process.env.DATABASE_URL as string);
   }
@@ -166,6 +170,19 @@ export class AuthService {
       .where(eq(refreshTokens.id, row.id));
     const accessToken = jwt.sign({ sub: row.userId }, jwtSecret(), { expiresIn: ACCESS_TTL_SECONDS });
     return { accessToken, refreshToken: next };
+  }
+
+  async mfaChallenge(ticket: string, code: string): Promise<{ pair: AuthPair; user: PublicUser }> {
+    const userId = this.mfa.verifyTicket(ticket);
+    if (!(await this.mfa.verifyCode(userId, code))) {
+      throw new UnauthorizedException("invalid code");
+    }
+    const db = this.db();
+    const userRows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (userRows.length === 0) throw new UnauthorizedException("unknown user");
+    const u = userRows[0];
+    const pair = await this.mintPair(u.id);
+    return { pair, user: { id: u.id, email: u.email, displayName: u.displayName } };
   }
 
   async logout(presented: string): Promise<{ revoked: boolean }> {
@@ -233,7 +250,7 @@ export class AuthService {
     return { sent: true };
   }
 
-  async magicConsume(token: string): Promise<{ pair: AuthPair; user: PublicUser }> {
+  async magicConsume(token: string): Promise<{ pair: AuthPair; user: PublicUser } | { mfaRequired: true; mfaTicket: string }> {
     const db = this.db();
     const rows = await db
       .select()
@@ -248,6 +265,9 @@ export class AuthService {
     const userRows = await db.select().from(users).where(eq(users.id, row.userId)).limit(1);
     const user = userRows[0];
     await db.update(magicLinks).set({ consumedAt: new Date() }).where(eq(magicLinks.id, row.id));
+    if (user.mfaEnabled) {
+      return { mfaRequired: true as const, mfaTicket: this.mfa.mintTicket(user.id) };
+    }
     const pair = await this.mintPair(user.id);
     return { pair, user: { id: user.id, email: user.email, displayName: user.displayName } };
   }
@@ -274,7 +294,7 @@ export class AuthService {
     code: string,
     state: string,
     redirectUri: string,
-  ): Promise<{ pair: AuthPair; user: PublicUser }> {
+  ): Promise<{ pair: AuthPair; user: PublicUser } | { mfaRequired: true; mfaTicket: string }> {
     const pending = pendingPkce.get(state);
     pendingPkce.delete(state);
     if (!pending || pending.expires < Date.now() || pending.redirectUri !== redirectUri) {
@@ -344,6 +364,9 @@ export class AuthService {
     const pair = await this.mintPair(userId);
     const userRows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     const u = userRows[0];
+    if (u.mfaEnabled) {
+      return { mfaRequired: true as const, mfaTicket: this.mfa.mintTicket(u.id) };
+    }
     return { pair, user: { id: u.id, email: u.email, displayName: u.displayName } };
   }
 

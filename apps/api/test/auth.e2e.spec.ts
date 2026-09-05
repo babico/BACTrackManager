@@ -39,7 +39,8 @@ async function magicPair(forEmail: string = email) {
   const start = await base().post("/auth/magic/start").send({ email: forEmail });
   const token = start.body.devToken as string;
   const consumed = await base().get("/auth/magic/consume").query({ token });
-  return consumed.body as { accessToken: string; refreshToken: string; user: { id: string } };
+  const body = consumed.body as { pair: { accessToken: string; refreshToken: string }; user: { id: string } };
+  return { accessToken: body.pair.accessToken, refreshToken: body.pair.refreshToken, user: body.user };
 }
 
 describe("magic link", () => {
@@ -149,9 +150,9 @@ describe("bactrack pkce", () => {
       .get("/auth/bactrack/callback")
       .query({ code: "authcode", state: started.body.state, redirect_uri: redirectUri });
     expect(cb.status).toBe(200);
-    expect(cb.body.accessToken).toBeTruthy();
-    const org = await orgOf(cb.body.accessToken as string);
-    const me = await base().get("/auth/me").set("Authorization", `Bearer ${cb.body.accessToken}`).set("x-org-id", org);
+    expect(cb.body.pair.accessToken).toBeTruthy();
+    const org = await orgOf(cb.body.pair.accessToken as string);
+    const me = await base().get("/auth/me").set("Authorization", `Bearer ${cb.body.pair.accessToken}`).set("x-org-id", org);
     expect(me.body.bactrackLinked).toBe(true);
   });
 
@@ -178,7 +179,7 @@ describe("bactrack pkce", () => {
     const cb = await base()
       .get("/auth/bactrack/callback")
       .query({ code: "c", state: started.body.state, redirect_uri: redirectUri });
-    const token = cb.body.accessToken as string;
+    const token = cb.body.pair.accessToken as string;
     const org = await orgOf(token);
     const del = await base().delete("/auth/bactrack").set("Authorization", `Bearer ${token}`).set("x-org-id", org);
     expect(del.status).toBe(200);

@@ -12,6 +12,7 @@ import { ReadingsController } from "./readings/readings.controller.js";
 import { AuditController } from "./audit/audit.controller.js";
 import { AuthController } from "./auth/auth.controller.js";
 import { AuthService } from "./auth/auth.service.js";
+import { MfaService } from "./auth/mfa.service.js";
 import { OrgsController } from "./orgs/orgs.controller.js";
 import { OrgsService } from "./orgs/orgs.service.js";
 import { ImportsController } from "./imports/imports.controller.js";
@@ -47,6 +48,7 @@ import { PushService } from "./push/push.service.js";
     DevicesService,
     SessionsService,
     AuthService,
+    MfaService,
     OrgsService,
     ImportsService,
     DawarichService,

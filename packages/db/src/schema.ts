@@ -1,4 +1,5 @@
 import {
+  boolean,
   check,
   index,
   integer,
@@ -45,6 +46,9 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 320 }).notNull().unique(),
   displayName: varchar("display_name", { length: 120 }).notNull(),
+  mfaSecret: text("mfa_secret"),
+  mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+  mfaBackupHashes: jsonb("mfa_backup_hashes").notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
