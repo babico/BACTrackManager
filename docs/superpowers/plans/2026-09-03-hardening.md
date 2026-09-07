@@ -87,7 +87,7 @@ export class MfaService {
 
 ### Task 3: Audit + store checklist + close-out
 
-- [ ] Secrets audit: grep repo (excluding node_modules/dist/.next/.git) for `BEGIN PRIVATE KEY`, `AKIA`, `xox[bpas]`, `ghp_`, `sk-live`, and our own known prefixes (`e7bb5b6a` sample key — MUST only appear in docs/plans as labeled sample, never in code/env); verify `.env`, `*.har` ignored (`git check-ignore`); run `db:verify`; record results in commit message.
+- [ ] Secrets audit: grep repo (excluding node_modules/dist/.next/.git) for `BEGIN PRIVATE KEY`, `AKIA`, `xox[bpas]`, `ghp_`, `sk-live`, and our own known prefixes (sample Dawarich key — MUST only appear in chat/history as labeled sample, never in code/env/docs); verify `.env`, `*.har` ignored (`git check-ignore`); run `db:verify`; record results in commit message.
 - [ ] `docs/store-release-checklist.md`: bundle IDs (`com.bactrack.manager` placeholder), iOS NSBluetooth*/NSLocation* usage strings, Android permissions, privacy manifest notes, TestFlight/Internal tracks, phased rollout, kill-switch (remote disable via API flag — future).
 - [ ] Full green + commit + report. RLS deferral noted in this plan (done above).
 
