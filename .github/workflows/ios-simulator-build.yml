@@ -1,0 +1,46 @@
+name: iOS simulator build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "apps/mobile-native/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/ios-simulator-build.yml"
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install JavaScript dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Install CocoaPods
+        working-directory: apps/mobile-native/ios
+        run: pod install
+      - name: Build simulator app
+        working-directory: apps/mobile-native/ios
+        run: >-
+          xcodebuild
+          -workspace BACtrackMobile.xcworkspace
+          -scheme BACtrackMobile
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build/DerivedData
+          CODE_SIGNING_ALLOWED=NO
+      - name: Package simulator app
+        run: ditto -c -k --sequesterRsrc --keepParent apps/mobile-native/ios/build/DerivedData/Build/Products/Debug-iphonesimulator/BACtrackMobile.app ios-simulator-app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bactrack-ios-simulator
+          path: ios-simulator-app.zip
+          if-no-files-found: error
