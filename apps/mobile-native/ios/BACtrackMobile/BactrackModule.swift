@@ -242,7 +242,7 @@ final class BactrackModule: RCTEventEmitter, CBCentralManagerDelegate, CBPeriphe
   func setSecureValue(_ key: String, value: String, resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) { store.setSecureValue(key, value); resolve(true) }
   @objc(clearSecureValue:resolver:rejecter:)
   func clearSecureValue(_ key: String, resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) { store.setSecureValue(key, ""); resolve(true) }
-  private func promise<T>(_ resolve: RCTPromiseResolveBlock, _ reject: RCTPromiseRejectBlock, operation: @escaping () throws -> T) {
+  private func promise<T>(_ resolve: @escaping RCTPromiseResolveBlock, _ reject: @escaping RCTPromiseRejectBlock, operation: @escaping () throws -> T) {
     DispatchQueue.global(qos: .utility).async { do { resolve(try operation()) } catch { reject("LOCAL_STORAGE_FAILED", error.localizedDescription, error) } }
   }
   override func invalidate() { stopScan(); if let peripheral { central.cancelPeripheralConnection(peripheral) }; store.close(); super.invalidate() }
