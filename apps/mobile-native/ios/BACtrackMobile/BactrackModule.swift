@@ -216,13 +216,13 @@ final class BactrackModule: RCTEventEmitter, CBCentralManagerDelegate, CBPeriphe
   }
 
   @objc(getLocalReadings:rejecter:)
-  func getLocalReadings(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) { promise(resolve, reject, operation: { try self.store.all() }) }
+  func getLocalReadings(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) { promise(resolve, reject, operation: { try self.store.all() }) }
   @objc(getUnsyncedLocalReadings:rejecter:)
-  func getUnsyncedLocalReadings(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) { promise(resolve, reject, operation: { try self.store.unsynced() }) }
+  func getUnsyncedLocalReadings(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) { promise(resolve, reject, operation: { try self.store.unsynced() }) }
   @objc(markLocalReadingsSynced:resolver:rejecter:)
-  func markLocalReadingsSynced(_ ids: [String], resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) { promise(resolve, reject, operation: { try self.store.markSynced(ids); return true }) }
+  func markLocalReadingsSynced(_ ids: [String], resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) { promise(resolve, reject, operation: { try self.store.markSynced(ids); return true }) }
   @objc(importCloudReadings:resolver:rejecter:)
-  func importCloudReadings(_ items: NSArray, resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+  func importCloudReadings(_ items: NSArray, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     promise(resolve, reject) {
       for item in items as? [[String: Any]] ?? [] {
         guard let id = item["id"] as? String, let value = item["bacPromille"] as? Double, let date = item["measuredAt"] as? String else { continue }
@@ -235,7 +235,7 @@ final class BactrackModule: RCTEventEmitter, CBCentralManagerDelegate, CBPeriphe
     }
   }
   @objc(clearLocalReadings:rejecter:)
-  func clearLocalReadings(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) { promise(resolve, reject, operation: { try self.store.clear(); return true }) }
+  func clearLocalReadings(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) { promise(resolve, reject, operation: { try self.store.clear(); return true }) }
   @objc(getSecureValue:resolver:rejecter:)
   func getSecureValue(_ key: String, resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) { resolve(store.secureValue(key)) }
   @objc(setSecureValue:value:resolver:rejecter:)
